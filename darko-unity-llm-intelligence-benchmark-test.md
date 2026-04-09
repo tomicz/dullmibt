@@ -78,47 +78,37 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Mandatory:** basin carving with cosine falloff, water surface placement, exclusion zone data, **single-pass rebake** of ALL terrain textures + grass.
 - **Scoring:** 100-point rubric covering river (25), lakes (25), ponds (15), terrain refresh (25), technical (10).
 
-### Layer 4 — Forest: procedural trees
+### Layer 4 — Props: trees, rocks, bushes, flowers
 
-- **Tree prop definition:** [context/props/generate-tree.md](context/props/generate-tree.md)  
-- **Forest placement prompt:** [context/generate-forest.md](context/generate-forest.md)  
+- **Placement prompt:** [context/generate-props.md](context/generate-props.md)  
+- **Prop definitions:**
+  - [context/props/generate-tree.md](context/props/generate-tree.md) — Procedural recursive tree (seeded, unique per instance)
+  - [context/props/generate-rock.md](context/props/generate-rock.md) — Rocks: singles, lines, mounds
+  - [context/props/generate-bush.md](context/props/generate-bush.md) — Bushes: singles + groups, half-buried
+  - [context/props/generate-flower.md](context/props/generate-flower.md) — Flowers: multi-color, larger tops
 - **Requires:** Layer 1 + Layer 3 completed. WaterExclusionZones must exist.
-- **Deliverables:** `Trees` parent with `Tree_N` children, each with unique seed. `Trunk` + `Leaves` sub-objects. Baked Lit materials. Natural distribution with clustering.
-- **Key rule:** Every tree is seeded-random generated — no two trees look alike. Recursive branching algorithm, cross-billboard leaf clusters.
-- **Scoring:** 100-point rubric covering placement quality (40), tree quality (30), technical quality (20), visual quality (10).
+- **Deliverables:** `Trees`, `Rocks`, `Bushes`, `Flowers` parent containers. All props raycast-grounded, respecting height/slope/water exclusion zones. Baked Lit materials. Natural distribution with clustering.
+- **Key rules:** Each prop uses seeded random for uniqueness. Placement respects terrain zones — no props on peaks, cliffs, or in water. Natural distribution with noise-based clustering and clearings.
+- **Scoring:** 100-point rubric covering placement quality (40), prop quality (30), technical quality (20), visual quality (10).
 
-### Layer 5 — Ground details: rocks
-
-- **Primary prompt:** [context/generate-rock-details.md](context/generate-rock-details.md)  
-- **Benchmark extension:** rocky **biome chunks** with extreme density; replace boxy cubes with irregular meshes if the model can.
-
-### Layer 6 — Ground details: bushes
-
-- **Primary prompt:** [context/generate-bush-details.md](context/generate-bush-details.md)  
-- **Benchmark extension:** chunks, lines, shapes, solo; **PBR** bush textures + **height** for parallax where URP Lit supports it.
-
-### Layer 7 — Ground details: flowers
-
-- **Primary prompt:** [context/generate-flower-details.md](context/generate-flower-details.md)
-
-### Layer 8 — Sky: volumetric-style clouds (primitive-based)
+### Layer 5 — Sky: volumetric-style clouds (primitive-based)
 
 - **Primary prompt:** [context/generate-volumetric-cloud.md](context/generate-volumetric-cloud.md)  
 - **Benchmark extension:** raise cloud height band; elongate groups; disable cloud shadow casting for ground readability (see graphics prompts).
 
-### Layer 9 — Horizon closure (optional hard tier)
+### Layer 6 — Horizon closure (optional hard tier)
 
 - Procedural **mountain ring** outside play bounds so the horizon is not infinite void.  
 - Not in a separate prompt file—tests whether the model can invent stable large meshes + placement without breaking Layer 1 rules.
 
-### Layer 10 — Lighting, shadows, post-processing
+### Layer 7 — Lighting, shadows, post-processing
 
 Pick **one** pass as specified by the benchmark runner:
 
 - **V2 / dense worlds:** [context/graphics.md](context/graphics.md)  
 - **Earlier polish preset:** [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)  
 
-### Layer 11 — Performance tier (optional)
+### Layer 8 — Performance tier (optional)
 
 - Add `LODGroup` on heavy chunk roots; tune `QualitySettings.lodBias`, URP `shadowDistance`, fog density vs clarity.  
 - Tests trade-offs without destroying art direction.
@@ -137,11 +127,11 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/terrain/generate-terrain-splat-map.md](context/terrain/generate-terrain-splat-map.md)             | Terrain splat mapping: multi-texture blending |
 | [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)                       | Water system: rivers, lakes, ponds + terrain refresh |
 | [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
+| [context/generate-props.md](context/generate-props.md)                                     | Props placement: trees, rocks, bushes, flowers |
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
-| [context/generate-forest.md](context/generate-forest.md)                                   | Forest placement: density, exclusions, distribution |
-| [context/generate-rock-details.md](context/generate-rock-details.md)                       | Rocks: singles, lines, mounds                 |
-| [context/generate-bush-details.md](context/generate-bush-details.md)                       | Bushes: singles + groups, half-buried         |
-| [context/generate-flower-details.md](context/generate-flower-details.md)                   | Flowers: multi-color, larger tops             |
+| [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
+| [context/props/generate-bush.md](context/props/generate-bush.md)                           | Bushes: singles + groups, half-buried         |
+| [context/props/generate-flower.md](context/props/generate-flower.md)                       | Flowers: multi-color, larger tops             |
 | [context/biome-temperate-forest.md](context/biome-temperate-forest.md)                     | Temperate forest biome definition             |
 | [context/generate-volumetric-cloud.md](context/generate-volumetric-cloud.md)               | Cloud systems from primitives                 |
 | [context/graphics.md](context/graphics.md)                                                 | Graphics V2 pass                              |
