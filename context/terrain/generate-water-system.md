@@ -17,7 +17,7 @@ Use this prompt with a Unity-capable coding agent (Unity MCP) to generate visibl
 
 | Type | Required? | Size | Where it belongs |
 |------|-----------|------|-----------------|
-| **River** | **Mandatory** | Half-width 8-12, spans entire map | Follows RiverPath spline through the valley carved by terrain generation. Extends off map edges. |
+| **River** | **Mandatory** | Half-width 14-18, spans entire map | Follows RiverPath spline through the valley carved by terrain generation. Extends off map edges. |
 | **Lake** | Optional (maps > 500x500) | Radius 25-60 | Natural low-elevation flat areas. Only if terrain has suitable basins. |
 | **Pond** | Optional (maps > 500x500) | Radius 8-18 | Plains with slope < 0.15. Bonus for larger maps only. |
 
@@ -53,7 +53,7 @@ IMPORTANT RULES:
      - IMPORTANT: For points beyond terrain bounds, clamp raycast XZ to terrain
        bounds and extrapolate Y from the nearest valid sample.
      - Water surface Y = terrainHeight + 0.3 (just above the carved bed).
-     - River half-width = 8-12 (match the channel carved in terrain generation).
+     - River half-width = 14-18 (match the channel carved in terrain generation).
 
    - Build a continuous quad-strip mesh along the entire path:
      - At each sample, compute forward direction and perpendicular (right).
@@ -102,7 +102,7 @@ IMPORTANT RULES:
    - Create "WaterExclusionZones" under "Water" parent.
    - For each water body, add a child GameObject encoding:
      type, radius/halfwidth, margin.
-   - Naming convention: "River_Exclusion_margin5_halfwidth10"
+   - Naming convention: "River_Exclusion_margin5_halfwidth16"
      or "Lake_0_r35_margin8" or "Pond_0_r12_margin6".
 
    Downstream placement rules:

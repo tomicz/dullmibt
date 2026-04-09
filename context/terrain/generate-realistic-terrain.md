@@ -119,8 +119,9 @@ Requirements:
      meander amplitude = 45 world units, frequency along path = sin(t * 4.5)
    - Smooth path using Catmull-Rom interpolation → dense polyline (200+ segments).
    - Carve channel:
-     riverHalfWidth = 10, bankWidth = 12, carveDepth = 6
-     Cosine falloff for smooth banks (NOT cliff edges).
+     riverHalfWidth = 18, bankWidth = 22, carveDepth = 4
+     U-shaped profile (quadratic: profile = (d/halfWidth)^2) for flat river bottom with gradual walls.
+     Bank transition uses cosine falloff (NOT cliff edges).
      River bed elevation descends along spline (flows downhill).
    - Store path on "RiverPath" GameObject for later water layer.
 
@@ -139,8 +140,8 @@ Requirements:
     - Rock: slope > 0.12 OR hN > 0.35 (aggressive — mountains MUST look rocky, not green)
       Steeper slopes = darker rock. Color: (0.45, 0.40, 0.33) to (0.30, 0.26, 0.22).
     - Snow: hN > 0.75 AND slope < 0.25. Blend to (0.92, 0.93, 0.96).
-    - River bed: distToRiver < 10 → (0.25, 0.18, 0.12)
-    - River bank: distToRiver 10-22 → blend dirt/rock to terrain color.
+    - River bed: distToRiver < 18 → (0.25, 0.18, 0.12)
+    - River bank: distToRiver 18-40 → blend dirt/rock to terrain color with quadratic ease (softer transition).
       In mountain zones (hN > 0.4): use rock color, not dirt.
     - Grass/Plains: remaining areas → (0.22, 0.50, 0.12) to (0.28, 0.55, 0.16).
 
