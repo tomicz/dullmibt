@@ -56,22 +56,22 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 
 ### Layer 1 — Terrain + surface PBR + grass on mesh
 
-- **Standard prompt (gentle terrain):** [context/generate-procedural-mesh-terrain.md](context/generate-procedural-mesh-terrain.md)  
-- **Realistic terrain prompt (benchmark tier):** [context/generate-realistic-terrain.md](context/generate-realistic-terrain.md)  
-- **Reference:** [context/new-terrain-pbr.md](context/new-terrain-pbr.md)  
+- **Standard prompt (gentle terrain):** [context/terrain/generate-procedural-mesh-terrain.md](context/terrain/generate-procedural-mesh-terrain.md)  
+- **Realistic terrain prompt (benchmark tier):** [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)  
+- **Reference:** [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)  
 - **Deliverables:** `ProceduralMeshGround` (mesh built with scale 1,1,1), `MeshCollider`, baked height/normal/mask textures, height-based terrain tint (snow/rock/grass/river zones), `ProceduralGrass` child system, `RiverPath` metadata object, assigned `Ground.mat` + `ProceduralGrass.mat`.
 - **Scoring:** Realistic terrain prompt includes a 100-point rubric covering structural quality (50), technical quality (30), and visual quality (20). Map size multiplier applies (0.5x–1.3x).
 
 ### Layer 2 — Terrain Splat Mapping (dynamic multi-texture blending)
 
-- **Primary prompt:** [context/generate-terrain-splat-map.md](context/generate-terrain-splat-map.md)  
+- **Primary prompt:** [context/terrain/generate-terrain-splat-map.md](context/terrain/generate-terrain-splat-map.md)  
 - **Requires:** Layer 1 completed (ProceduralMeshGround with varied topography + RiverPath).
 - **Deliverables:** `TerrainSplatMap.png` (RGBA weight map), 12 tileable PBR textures (4 zones x albedo/normal/mask), composite baked albedo + normal + mask on `Ground.mat`.
 - **Scoring:** 100-point rubric covering splat map quality (30), tileable texture quality (30), composite bake quality (25), technical quality (15).
 
 ### Layer 3 — Water System (rivers, lakes, ponds + terrain refresh)
 
-- **Primary prompt:** [context/generate-water-system.md](context/generate-water-system.md)  
+- **Primary prompt:** [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)  
 - **Requires:** Layer 1 + Layer 2 completed. RiverPath must exist.
 - **Why before objects:** Water carves terrain geometry. All objects must be placed on FINAL terrain — after all carving is done. Placing objects first, then carving, would leave floating trees and buried rocks.
 - **Deliverables:** `RiverWater` mesh following RiverPath, `Lake_N` irregular water bodies in low points, `Pond_N` small water bodies in plains, `WaterExclusionZones` for downstream layers, full terrain texture rebake (tint, normal, height, splat, grass mask, composites), regenerated grass.
@@ -135,11 +135,11 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 
 | File                                                                                       | Role                                          |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| [context/generate-procedural-mesh-terrain.md](context/generate-procedural-mesh-terrain.md) | Procedural mesh terrain, maps, grass (gentle) |
-| [context/generate-realistic-terrain.md](context/generate-realistic-terrain.md)             | Realistic terrain: mountains, hills, river (benchmark tier) |
-| [context/generate-terrain-splat-map.md](context/generate-terrain-splat-map.md)             | Terrain splat mapping: multi-texture blending |
-| [context/generate-water-system.md](context/generate-water-system.md)                       | Water system: rivers, lakes, ponds + terrain refresh |
-| [context/new-terrain-pbr.md](context/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
+| [context/terrain/generate-procedural-mesh-terrain.md](context/terrain/generate-procedural-mesh-terrain.md) | Procedural mesh terrain, maps, grass (gentle) |
+| [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)             | Realistic terrain: mountains, hills, river (benchmark tier) |
+| [context/terrain/generate-terrain-splat-map.md](context/terrain/generate-terrain-splat-map.md)             | Terrain splat mapping: multi-texture blending |
+| [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)                       | Water system: rivers, lakes, ponds + terrain refresh |
+| [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
 | [context/world-placement-delegator.md](context/world-placement-delegator.md)               | Raycast grounding, overlap, refresh handshake |
 | [context/generate-primitive-tree.md](context/generate-primitive-tree.md)                   | Primitive trunk + canopy tree                 |
 | [context/generate-cone-tree.md](context/generate-cone-tree.md)                             | Procedural cone canopy + trunk                |
