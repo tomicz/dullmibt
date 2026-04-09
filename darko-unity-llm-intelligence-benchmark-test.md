@@ -146,8 +146,6 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/world-placement-delegator.md](context/world-placement-delegator.md)               | Raycast grounding, overlap, refresh handshake |
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/generate-forest.md](context/generate-forest.md)                                   | Forest placement: density, exclusions, distribution |
-| [context/generate-primitive-tree.md](context/generate-primitive-tree.md)                   | Primitive trunk + canopy tree (legacy)        |
-| [context/generate-cone-tree.md](context/generate-cone-tree.md)                             | Procedural cone canopy + trunk (legacy)       |
 | [context/generate-rock-details.md](context/generate-rock-details.md)                       | Rocks: singles, lines, mounds                 |
 | [context/generate-bush-details.md](context/generate-bush-details.md)                       | Bushes: singles + groups, half-buried         |
 | [context/generate-flower-details.md](context/generate-flower-details.md)                   | Flowers: multi-color, larger tops             |
