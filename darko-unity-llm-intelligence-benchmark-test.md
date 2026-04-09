@@ -84,11 +84,14 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - Use for every grounded object class from here on.
 - Must respect `WaterExclusionZones` from Layer 3.
 
-### Layer 5 — Forests: mixed tree types (primitive + cone)
+### Layer 5 — Forest: procedural trees
 
-- **Primitive trees:** [context/generate-primitive-tree.md](context/generate-primitive-tree.md)  
-- **Cone trees:** [context/generate-cone-tree.md](context/generate-cone-tree.md)  
-- **Benchmark extension:** organize **chunk biomes** (separate `ConeTrees` vs `Trees`), optional interstitial mini-groves, thousands of instances with varied scale—still raycast-grounded.
+- **Tree prop definition:** [context/props/generate-tree.md](context/props/generate-tree.md)  
+- **Forest placement prompt:** [context/generate-forest.md](context/generate-forest.md)  
+- **Requires:** Layer 1 + Layer 3 completed. WaterExclusionZones must exist.
+- **Deliverables:** `Trees` parent with `Tree_N` children, each with unique seed. `Trunk` + `Leaves` sub-objects. Baked Lit materials. Natural distribution with clustering.
+- **Key rule:** Every tree is seeded-random generated — no two trees look alike. Recursive branching algorithm, cross-billboard leaf clusters.
+- **Scoring:** 100-point rubric covering placement quality (40), tree quality (30), technical quality (20), visual quality (10).
 
 ### Layer 6 — Ground details: rocks
 
@@ -141,8 +144,10 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)                       | Water system: rivers, lakes, ponds + terrain refresh |
 | [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
 | [context/world-placement-delegator.md](context/world-placement-delegator.md)               | Raycast grounding, overlap, refresh handshake |
-| [context/generate-primitive-tree.md](context/generate-primitive-tree.md)                   | Primitive trunk + canopy tree                 |
-| [context/generate-cone-tree.md](context/generate-cone-tree.md)                             | Procedural cone canopy + trunk                |
+| [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
+| [context/generate-forest.md](context/generate-forest.md)                                   | Forest placement: density, exclusions, distribution |
+| [context/generate-primitive-tree.md](context/generate-primitive-tree.md)                   | Primitive trunk + canopy tree (legacy)        |
+| [context/generate-cone-tree.md](context/generate-cone-tree.md)                             | Procedural cone canopy + trunk (legacy)       |
 | [context/generate-rock-details.md](context/generate-rock-details.md)                       | Rocks: singles, lines, mounds                 |
 | [context/generate-bush-details.md](context/generate-bush-details.md)                       | Bushes: singles + groups, half-buried         |
 | [context/generate-flower-details.md](context/generate-flower-details.md)                   | Flowers: multi-color, larger tops             |
