@@ -56,52 +56,61 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 
 ### Layer 1 — Terrain + surface PBR + grass on mesh
 
-- **Primary prompt:** [Prompts/generate-procedural-mesh-terrain.md](Prompts/generate-procedural-mesh-terrain.md)  
+- **Standard prompt (gentle terrain):** [Prompts/generate-procedural-mesh-terrain.md](Prompts/generate-procedural-mesh-terrain.md)  
+- **Realistic terrain prompt (benchmark tier):** [Prompts/generate-realistic-terrain.md](Prompts/generate-realistic-terrain.md)  
 - **Reference:** [Prompts/new-terrain-pbr.md](Prompts/new-terrain-pbr.md)  
-- **Deliverables:** `ProceduralMeshGround` (mesh rebuilt at scale), `MeshCollider`, baked height/normal/mask textures, hybrid height tint, `ProceduralGrass` child system, assigned `Ground.mat` + `ProceduralGrass.mat`.
+- **Deliverables:** `ProceduralMeshGround` (mesh rebuilt at scale), `MeshCollider`, baked height/normal/mask textures, height-based terrain tint (snow/rock/grass/river zones), `ProceduralGrass` child system, `RiverPath` metadata object, assigned `Ground.mat` + `ProceduralGrass.mat`.
+- **Scoring:** Realistic terrain prompt includes a 100-point rubric covering structural quality (50), technical quality (30), and visual quality (20).
 
-### Layer 2 — Placement contract (read before spawning anything)
+### Layer 2 — Terrain Splat Mapping (dynamic multi-texture blending)
+
+- **Primary prompt:** [Prompts/generate-terrain-splat-map.md](Prompts/generate-terrain-splat-map.md)  
+- **Requires:** Layer 1 completed (ProceduralMeshGround with varied topography + RiverPath).
+- **Deliverables:** `TerrainSplatMap.png` (RGBA weight map), 12 tileable PBR textures (4 zones x albedo/normal/mask), composite baked albedo + normal + mask on `Ground.mat`.
+- **Scoring:** 100-point rubric covering splat map quality (30), tileable texture quality (30), composite bake quality (25), technical quality (15).
+
+### Layer 3 — Placement contract (read before spawning anything)
 
 - **Primary prompt:** [Prompts/world-placement-delegator.md](Prompts/world-placement-delegator.md)  
 - Use for every grounded object class from here on.
 
-### Layer 3 — Forests: mixed tree types (primitive + cone)
+### Layer 4 — Forests: mixed tree types (primitive + cone)
 
 - **Primitive trees:** [Prompts/generate-primitive-tree.md](Prompts/generate-primitive-tree.md)  
 - **Cone trees:** [Prompts/generate-cone-tree.md](Prompts/generate-cone-tree.md)  
 - **Benchmark extension:** organize **chunk biomes** (separate `ConeTrees` vs `Trees`), optional interstitial mini-groves, thousands of instances with varied scale—still raycast-grounded.
 
-### Layer 4 — Ground details: rocks
+### Layer 5 — Ground details: rocks
 
 - **Primary prompt:** [Prompts/generate-rock-details.md](Prompts/generate-rock-details.md)  
 - **Benchmark extension:** rocky **biome chunks** with extreme density; replace boxy cubes with irregular meshes if the model can.
 
-### Layer 5 — Ground details: bushes
+### Layer 6 — Ground details: bushes
 
 - **Primary prompt:** [Prompts/generate-bush-details.md](Prompts/generate-bush-details.md)  
 - **Benchmark extension:** chunks, lines, shapes, solo; **PBR** bush textures + **height** for parallax where URP Lit supports it.
 
-### Layer 6 — Ground details: flowers
+### Layer 7 — Ground details: flowers
 
 - **Primary prompt:** [Prompts/generate-flower-details.md](Prompts/generate-flower-details.md)
 
-### Layer 7 — Ponds (definition + rules + terrain refresh)
+### Layer 8 — Ponds (definition + rules + terrain refresh)
 
 - **What a pond is:** [Prompts/pond-definition.md](Prompts/pond-definition.md)  
 - **How to place and post-process:** [Prompts/pond-placement-rules.md](Prompts/pond-placement-rules.md)  
 - **Mandatory:** local basin carve, water surface lift, exclusion zones, **rebake** terrain maps + **regenerate** grass.
 
-### Layer 8 — Sky: volumetric-style clouds (primitive-based)
+### Layer 9 — Sky: volumetric-style clouds (primitive-based)
 
 - **Primary prompt:** [Prompts/generate-volumetric-cloud.md](Prompts/generate-volumetric-cloud.md)  
 - **Benchmark extension:** raise cloud height band; elongate groups; disable cloud shadow casting for ground readability (see graphics prompts).
 
-### Layer 9 — Horizon closure (optional hard tier)
+### Layer 10 — Horizon closure (optional hard tier)
 
 - Procedural **mountain ring** outside play bounds so the horizon is not infinite void.  
 - Not in a separate prompt file—tests whether the model can invent stable large meshes + placement without breaking Layer 1 rules.
 
-### Layer 10 — Lighting, shadows, post-processing
+### Layer 11 — Lighting, shadows, post-processing
 
 Pick **one** pass as specified by the benchmark runner:
 
@@ -109,7 +118,7 @@ Pick **one** pass as specified by the benchmark runner:
 - **Earlier polish preset:** [Prompts/visual-polish-lighting-graphics.md](Prompts/visual-polish-lighting-graphics.md)  
 - **Shadow clarity subset:** [Prompts/graphi.md](Prompts/graphi.md)
 
-### Layer 11 — Performance tier (optional)
+### Layer 12 — Performance tier (optional)
 
 - Add `LODGroup` on heavy chunk roots; tune `QualitySettings.lodBias`, URP `shadowDistance`, fog density vs clarity.  
 - Tests trade-offs without destroying art direction.
@@ -123,7 +132,9 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 
 | File                                                                                       | Role                                          |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| [Prompts/generate-procedural-mesh-terrain.md](Prompts/generate-procedural-mesh-terrain.md) | Procedural mesh terrain, maps, grass          |
+| [Prompts/generate-procedural-mesh-terrain.md](Prompts/generate-procedural-mesh-terrain.md) | Procedural mesh terrain, maps, grass (gentle) |
+| [Prompts/generate-realistic-terrain.md](Prompts/generate-realistic-terrain.md)             | Realistic terrain: mountains, hills, river (benchmark tier) |
+| [Prompts/generate-terrain-splat-map.md](Prompts/generate-terrain-splat-map.md)             | Terrain splat mapping: multi-texture blending |
 | [Prompts/new-terrain-pbr.md](Prompts/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
 | [Prompts/world-placement-delegator.md](Prompts/world-placement-delegator.md)               | Raycast grounding, overlap, refresh handshake |
 | [Prompts/generate-primitive-tree.md](Prompts/generate-primitive-tree.md)                   | Primitive trunk + canopy tree                 |
