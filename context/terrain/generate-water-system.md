@@ -1,278 +1,184 @@
 # Prompt: Water System Generation (Rivers, Lakes, Ponds)
 
-Use this prompt with a Unity-capable coding agent (Unity MCP) to generate a complete water system on `ProceduralMeshGround`. This layer adds visible water surfaces to the river valley carved in Layer 1, carves and fills lakes in natural low points, and scatters small ponds in flat areas.
+Use this prompt with a Unity-capable coding agent (Unity MCP) to generate visible water surfaces on `ProceduralMeshGround`. Water reads the existing terrain geometry and places surfaces on top — it does **NOT** modify the terrain mesh.
+
+## Critical Rule: Terrain is READ-ONLY
+
+**The water layer must NEVER modify terrain vertices, normals, UVs, or any terrain textures.** The terrain was finalized in Layer 1 (and optionally Layer 2). Each benchmark layer builds on top of previous layers without modifying their output. Water surfaces sit on the terrain — they do not carve, flatten, or reshape it.
 
 ## Prerequisites
 
 - `ProceduralMeshGround` must exist with a valid mesh, UVs, and MeshCollider.
 - Terrain must have height variation (mountains, hills, plains) — rivers need elevation change.
 - `RiverPath` GameObject must exist (created by terrain generation) with child transforms defining the river spline.
-- Terrain splat mapping (Layer 2) should be complete — water system will trigger a full rebake.
+- The river valley was already carved into the terrain mesh during Layer 1. This layer only adds the visible water surface.
 
 ## Water body types
 
-| Type | Size | Shape | Where it belongs | Basin |
-|------|------|-------|-----------------|-------|
-| **River** | Half-width 8-12, length spans map | Long strip following RiverPath spline | Valley carved by terrain generator, flows off map edges | Already carved by Layer 1. This layer adds the water surface only. |
-| **Lake** | Radius 25-60 | Irregular (noise-deformed circle, 8-12 control points) | Natural low points where terrain height < 20% of height range, or where rivers widen | Carve basin: depth 4-8, smooth cosine falloff over bankWidth 15-25 |
-| **Pond** | Radius 8-18 | Smooth circle/oval | Plains and gentle hills, slope < 0.15, away from rivers and lakes | Carve basin: depth 2-4, smooth cosine falloff over bankWidth 8-12 |
+| Type | Required? | Size | Where it belongs |
+|------|-----------|------|-----------------|
+| **River** | **Mandatory** | Half-width 8-12, spans entire map | Follows RiverPath spline through the valley carved by terrain generation. Extends off map edges. |
+| **Lake** | Optional (maps > 500x500) | Radius 25-60 | Natural low-elevation flat areas. Only if terrain has suitable basins. |
+| **Pond** | Optional (maps > 500x500) | Radius 8-18 | Plains with slope < 0.15. Bonus for larger maps only. |
+
+For a standard 500x500 map: only the river is required. Lakes and ponds are bonus points for larger maps that have enough flat low terrain to support them.
 
 ---
 
 ## Copy/Paste Prompt
 
 ```text
-Generate a complete water system on the existing ProceduralMeshGround in the active Unity scene.
-This adds river water surfaces, carves and fills lakes, and places small ponds.
+Generate water surfaces on the existing ProceduralMeshGround in the active Unity scene.
+This adds visible water meshes that sit ON TOP of the terrain. Do NOT modify the terrain mesh.
 
 IMPORTANT RULES:
+- DO NOT modify ProceduralMeshGround vertices, normals, UVs, or collider. Terrain is READ-ONLY.
+- DO NOT rebake any terrain textures (tint, normal, height, splat, grass mask). They are final.
 - transform.localScale is ALWAYS (1, 1, 1) for all water objects.
-- Read terrain mesh data (vertices, normals, bounds) before placing anything.
-- All basin carving uses smooth cosine falloff — NO cliff edges.
-- After ALL carving is complete, rebake ALL terrain textures (single rebake pass, not per-water-body).
-
-Inputs (honor these if specified, otherwise use defaults):
-- seed = 42
-- Map size is read from ProceduralMeshGround mesh bounds.
+- Read terrain mesh data (vertices, normals, bounds) to determine where water goes.
+- Water surfaces sit slightly above the terrain surface — not buried, not floating high.
 
 1. READ TERRAIN AND RIVER DATA
-   - Find "ProceduralMeshGround" — get MeshFilter mesh vertices, normals, bounds.
-   - Record height range (minH, maxH), terrain bounds (minX, maxX, minZ, maxZ).
+   - Find "ProceduralMeshGround" — get MeshFilter mesh bounds, transform scale.
+   - Compute terrain world bounds (bounds * scale).
    - Find "RiverPath" — reconstruct the river polyline from child transforms.
-     Build a dense list of (position, forward direction) samples along the spline.
-   - Compute the river's elevation profile (height at each sample point).
+   - Build a dense polyline using Catmull-Rom interpolation (200+ segments).
 
-2. GENERATE RIVER WATER SURFACE
-   The river channel was already carved by terrain generation. This step adds the visible water.
+2. GENERATE RIVER WATER SURFACE (mandatory)
+   The river channel was already carved into terrain during Layer 1.
+   This step adds the visible water mesh that fills that channel.
 
    - Walk the RiverPath polyline. At each sample point:
-     - Sample terrain height at river center via raycast or vertex lookup.
-     - Water surface Y = riverBedHeight + waterDepth (waterDepth = 1.5-2.5, varies slightly).
-     - River width at this point = riverHalfWidth * 2 (use 8-12 half-width, matching terrain carve).
+     - Raycast DOWN from above to find terrain surface height at river center.
+     - IMPORTANT: For points beyond terrain bounds, clamp raycast XZ to terrain
+       bounds and extrapolate Y from the nearest valid sample.
+     - Water surface Y = terrainHeight + 0.3 (just above the carved bed).
+     - River half-width = 8-12 (match the channel carved in terrain generation).
 
    - Build a continuous quad-strip mesh along the entire path:
-     - At each sample, emit two vertices: center + perpendicular * halfWidth on each side.
-     - Connect adjacent samples into quads.
-     - UVs: U = cross-stream (0 to 1), V = along-stream (accumulate distance / totalLength).
+     - At each sample, compute forward direction and perpendicular (right).
+     - Emit two vertices: center ± right * halfWidth.
+     - Connect adjacent samples into quads (two triangles per quad).
+     - UVs: U = cross-stream (0 to 1), V = along-stream (normalized distance).
 
-   - The mesh must extend BEYOND terrain bounds at both ends (river flows off map).
+   - Smooth the water Y values (3-5 passes of neighbor averaging) for gentle flow.
+   - The mesh MUST extend beyond terrain bounds at both ends (river flows off map).
 
    - Create GameObject "RiverWater" under parent "Water".
-     MeshFilter + MeshRenderer. No MeshCollider needed (visual only).
-   - Assign material: Assets/Materials/Water.mat
-     - If material doesn't exist, create URP Lit material:
-       Surface Type = Transparent, Base Color = (0.15, 0.30, 0.42, 0.75),
-       Smoothness = 0.92, Metallic = 0.0.
+     MeshFilter + MeshRenderer. No MeshCollider (visual only).
 
-3. IDENTIFY LAKE LOCATIONS
-   Lakes form in natural low areas. Use terrain data to find candidates:
+3. WATER MATERIAL
+   - Path: Assets/Materials/Water.mat
+   - If it doesn't exist, create a URP Lit material:
+     Surface Type = Transparent
+     Base Color = (0.12, 0.28, 0.40, 0.80) — blue-green, mostly opaque
+     Smoothness = 0.95
+     Metallic = 0.1
+     Render queue = 3000
+     Enable _SURFACE_TYPE_TRANSPARENT keyword
+     ZWrite = 0, SrcBlend = SrcAlpha, DstBlend = OneMinusSrcAlpha
 
-   - Scan terrain in a coarse grid (every 40-60 units).
-   - At each sample, compute average height in a radius of 30-50 units.
-   - Candidate = local minimum where avgHeight < (minH + 0.20 * (maxH - minH)).
-   - Additional candidates: points along the river where the valley widens
-     (terrain slopes away gently on both sides for > 40 units).
+4. OPTIONAL: LAKES (only for maps > 500x500 with suitable terrain)
+   If the map is large enough and has natural low basins:
 
-   - Merge candidates closer than 50 units (keep the lowest).
-   - Reject candidates too close to terrain edge (< 40 units from bounds).
-   - Reject candidates on steep slopes (average slope > 0.20 in the radius).
+   - Scan terrain for flat low areas (avgHeight < 20% of height range, slope < 0.15).
+   - Target: 1 lake per 400x400 area. A 1000x1000 map might have 4-6 lakes.
+   - Lake = flat circular/oval water surface mesh placed at the terrain's local minimum + 0.3.
+   - The water surface covers the low area — it does NOT carve a basin.
+     Some terrain will poke above the water at edges, creating a natural shoreline.
+   - Use a fan mesh from center with 32-48 edge vertices.
+   - Create as "Lake_N" under "Water" parent.
 
-   - Target count: 1 lake per 250x250 area of map.
-     A 500x500 map gets 2-4 lakes. A 1000x1000 map gets 6-12.
+5. OPTIONAL: PONDS (bonus for large maps)
+   Small water circles in flat plains:
+   - Only if map > 500x500 and there are flat low areas away from river/lakes.
+   - 1 pond per 200x200 area, radius 8-18.
+   - Simple flat circle mesh at terrain height + 0.2.
+   - Create as "Pond_N" under "Water" parent.
 
-   - For each lake, determine radius:
-     - Base radius: 25-60 (larger maps can have larger lakes).
-     - Reduce radius if it would overlap another lake or extend past terrain bounds.
+6. EXCLUSION ZONE DATA (for downstream layers)
+   Store exclusion data so trees/rocks/bushes avoid water areas:
 
-4. CARVE LAKE BASINS
-   For each lake candidate:
+   - Create "WaterExclusionZones" under "Water" parent.
+   - For each water body, add a child GameObject encoding:
+     type, radius/halfwidth, margin.
+   - Naming convention: "River_Exclusion_margin5_halfwidth10"
+     or "Lake_0_r35_margin8" or "Pond_0_r12_margin6".
 
-   - Generate an irregular shoreline shape:
-     - Start with a circle of the chosen radius.
-     - Apply 8-12 control points with noise-based radius variation (0.7x to 1.3x base radius).
-     - Smooth with Catmull-Rom interpolation for natural shoreline.
+   Downstream placement rules:
+   - Trees: full exclusion margin
+   - Bushes: 50% of margin (can approach closer)
+   - Flowers: 30% of margin
+   - Rocks: can be ON shoreline banks
 
-   - Carve basin into terrain mesh vertices:
-     - For each vertex within lake influence range (radius + bankWidth):
-       - Compute distance from vertex to nearest point on shoreline polygon.
-       - Inside shoreline: lower vertex by carveDepth (4-8 units).
-         Use smooth bowl profile: depth = carveDepth * cos(distFromCenter / radius * PI/2).
-       - Bank zone (shoreline to shoreline + bankWidth):
-         Blend from carved depth to original height using cosine falloff.
-         bankWidth = 15-25 units for natural shores.
-       - Beyond bank zone: no modification.
-
-   - Store each lake's center, shoreline polygon, and water surface height for later.
-
-   - If a lake intersects the river:
-     - The lake water level = max(river water level at intersection, lake basin floor + waterDepth).
-     - The shoreline opens where the river enters/exits (no bank wall across river).
-
-5. GENERATE LAKE WATER SURFACES
-   For each lake:
-
-   - Build a mesh from the irregular shoreline polygon:
-     - Triangulate the shoreline polygon (fan from center or ear-clipping).
-     - Water surface Y = basinFloor + waterDepth (waterDepth = 3-6 for lakes).
-     - UVs: planar XZ mapping, scaled so 1 UV unit = 20 world units.
-
-   - Create GameObject "Lake_N" under parent "Water".
-     MeshFilter + MeshRenderer.
-   - Assign material: Assets/Materials/Water.mat (same as river).
-
-6. IDENTIFY AND PLACE PONDS
-   Ponds are small water bodies in flat terrain, away from larger water features.
-
-   - Candidate placement:
-     - Random XZ positions within terrain bounds (edge padding = 30 units).
-     - Must be in flat areas: local slope < 0.15.
-     - Must be at low-to-mid elevation: height < 50% of height range.
-     - Minimum distance from any river point: 40 units.
-     - Minimum distance from any lake shoreline: 30 units.
-     - Minimum distance between ponds: 35 units.
-
-   - Target count: 1 pond per 150x150 area of map.
-     A 500x500 map gets 6-10 ponds. A 1000x1000 map gets 20-40.
-
-   - For each pond:
-     - Radius: 8-18 units (randomized per pond).
-     - Shape: smooth circle or slight oval (aspect ratio 1.0-1.4, random rotation).
-     - Carve basin: depth 2-4, bankWidth 8-12, cosine falloff.
-     - Water surface Y = basinFloor + waterDepth (waterDepth = 1.0-2.0).
-
-   - Build circular/oval mesh for water surface.
-     32-48 edge vertices for smooth circle. UVs: planar XZ, 1 UV unit = 10 world units.
-
-   - Create GameObjects "Pond_N" under parent "Water".
-     Assign material: Assets/Materials/Water.mat.
-
-7. POST-CARVE TERRAIN REFRESH (MANDATORY — single pass after ALL carving)
-   Lake and pond carving modified terrain vertices. ALL terrain-derived data must be rebaked.
-
-   - Update mesh:
-     mesh.vertices = modified vertices
-     mesh.RecalculateNormals()
-     mesh.RecalculateTangents()
-     mesh.RecalculateBounds()
-     Update MeshCollider (assign mesh again or call MeshCollider.sharedMesh = mesh).
-
-   - Rebake textures (use the SAME algorithms as Layer 1 and Layer 2):
-     a) GroundHeightMap.png (1024x1024, linear)
-     b) GroundNormalMap.png (2048x2048, normal map)
-     c) GroundHeightTint.png (1024x1024, sRGB) — recompute height+slope coloring.
-        Water body interiors should tint as dark earth/mud: (0.18, 0.15, 0.10).
-        Bank zones blend to surrounding terrain color.
-     d) GroundGrassMask.png (1024x1024, linear) — exclude:
-        - Inside any water body shoreline
-        - Within shorelineMargin (6 units) of any shoreline
-        - Existing slope/height rules still apply
-     e) TerrainSplatMap.png (1024x1024, linear RGBA) — recompute splat weights.
-        Water body interiors and banks: increase dirt channel (B).
-     f) Composite albedo, normal, mask — rebake from updated splat map.
-
-   - Reassign all textures to Ground.mat (same slots as Layer 1/2).
-   - Regenerate ProceduralGrass with updated mask (no grass in water or shoreline zones).
-
-8. EXCLUSION ZONE DATA (for downstream layers)
-   Store exclusion data so future placement layers (trees, rocks, etc.) can query it:
-
-   - Create GameObject "WaterExclusionZones" under "Water" parent.
-   - For each water body, store as child transform or component:
-     - Type (river/lake/pond)
-     - Center position
-     - Radius or bounding polygon
-     - shorelineMargin = 6 for ponds, 8 for lakes, 5 for river banks
-
-   Downstream placement rule: NO grounded objects within (waterBody + shorelineMargin).
-   Bushes may approach 50% closer than trees. Flowers may approach 70% closer.
-   Rocks may be placed ON shoreline banks (partially submerged look).
-
-9. ENVIRONMENT
+7. ENVIRONMENT
    - Fog MUST remain disabled (RenderSettings.fog = false).
 
-10. SAVE AND REPORT
-    Return summary:
-    - River: length, average width, water depth, vertex count
-    - Lakes: count, positions, radii, shapes
-    - Ponds: count, positions, radii
-    - Total water surface area (approximate)
-    - Terrain textures rebaked (list paths)
-    - Grass regenerated (count, exclusions applied)
-    - Material assignments confirmed
-    - Exclusion zone data stored
+8. REPORT
+   Return summary:
+   - River: length, width, vertex count, Y range
+   - Lakes: count, positions, radii (if any)
+   - Ponds: count, positions, radii (if any)
+   - Material path
+   - Exclusion zones stored
+   - Confirm: terrain was NOT modified
 ```
 
 ---
 
 ## Expected Result
 
-- **River** is a continuous, visible water surface flowing along the carved valley and extending off map edges. Water sits slightly above the river bed, not buried in terrain.
-- **Lakes** are large, irregularly shaped water bodies in natural low points. Shorelines are organic, not perfect circles. Basins are smooth bowls, not cliff-walled pits.
-- **Ponds** are small, smooth circles/ovals scattered in flat terrain. Clearly separate from rivers and lakes.
-- All water shares the same material with a blue-green transparent look.
-- Terrain around carved basins has smooth banks with cosine falloff — no cliff edges.
-- Terrain textures are fully rebaked: tint, normal, heightmap, grass mask, splat map, composites.
-- No grass inside water bodies or within shoreline margins.
-- Exclusion zone data is stored for downstream placement layers.
+- **River** is a continuous, visible blue-green water surface flowing along the carved valley. It extends off both map edges. Water sits just above the terrain surface, not buried and not floating.
+- **Lakes** (if present) are flat water circles/ovals in natural low areas. Some terrain pokes through at edges creating natural shorelines.
+- **Ponds** (if present) are small water circles in flat plains.
+- All water shares the same transparent material.
+- Terrain mesh is UNCHANGED — no vertices modified, no textures rebaked.
+- Exclusion zone data stored for downstream placement layers.
 
 ---
 
 ## Scoring Rubric (100 points)
 
-### River Quality (25 points)
+### River Quality (50 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Water surface follows path** | 8 | Continuous quad-strip mesh along RiverPath. No gaps. Extends off map edges. |
-| **Correct elevation** | 7 | Water sits above river bed, not buried. Flows downhill (surface Y descends along path). |
-| **Width and shape** | 5 | Consistent width matching carved channel. Smooth, no jagged edges. |
-| **Visual quality** | 5 | Transparent blue-green, readable as water. Distinct from terrain. |
+| **Water surface follows channel** | 15 | Continuous mesh along entire RiverPath. No gaps. Fills the carved valley. |
+| **Correct elevation** | 10 | Water sits just above terrain bed (0.2-0.5 above). Not buried, not floating high. |
+| **Extends off map** | 8 | Water mesh continues beyond terrain bounds at both ends. |
+| **Width matches channel** | 7 | Water width matches the carved river channel width. |
+| **Smooth flow** | 5 | No jagged Y jumps. Water surface is gently smoothed. |
+| **Visual quality** | 5 | Transparent blue-green, readable as water. |
 
-### Lake Quality (25 points)
-
-| Criterion | Points | Full marks |
-|-----------|--------|------------|
-| **Natural placement** | 7 | Lakes in genuine low points. Not on mountain slopes or ridges. |
-| **Irregular shoreline** | 7 | Noise-deformed shape, not perfect circles. 8-12 control points, smooth interpolation. |
-| **Basin carving** | 6 | Smooth bowl profile. Cosine falloff banks. No cliff edges. |
-| **River connection** | 5 | If lake intersects river, shoreline opens naturally. Water levels match. |
-
-### Pond Quality (15 points)
+### Optional Water Bodies (20 points — bonus)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Placement rules** | 5 | Flat terrain, low elevation, away from rivers/lakes. Minimum spacing enforced. |
-| **Basin and surface** | 5 | Smooth carve, visible water, not buried. |
-| **Count scaling** | 5 | Pond count scales with map size. Not too few, not too many. |
+| **Lake placement** | 8 | In genuine low, flat areas. Not on slopes or peaks. |
+| **Lake shape** | 4 | Reasonable shape. Natural shoreline where terrain intersects water. |
+| **Pond placement** | 4 | Flat plains only, away from river/lakes. |
+| **Count scaling** | 4 | Appropriate count for map size. Not too many on small maps. |
 
-### Terrain Refresh (25 points)
-
-| Criterion | Points | Full marks |
-|-----------|--------|------------|
-| **Mesh update** | 5 | Normals, tangents, bounds recalculated. MeshCollider updated. |
-| **Texture rebake** | 8 | All 6+ textures rebaked from post-carve geometry. Correct algorithms reused. |
-| **Grass update** | 5 | Grass regenerated with water exclusion. No grass in water or shoreline zones. |
-| **Splat map update** | 4 | Dirt channel increased in water/bank areas. Composite textures rebaked. |
-| **Single pass** | 3 | All carving done FIRST, then ONE rebake pass. Not rebaking per water body. |
-
-### Technical Quality (10 points)
+### Technical Quality (30 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Scale rule** | 2 | All water objects scale = (1,1,1). Size from mesh geometry. |
-| **Hierarchy** | 3 | Clean: Water parent → RiverWater, Lake_N, Pond_N, WaterExclusionZones. |
-| **Exclusion data** | 3 | Stored and queryable for downstream layers. Correct margins per type. |
-| **Performance** | 2 | Generation under 20 seconds. No editor freeze. |
+| **Terrain untouched** | 10 | NO terrain vertices modified. NO textures rebaked. This is the #1 rule. |
+| **Scale rule** | 3 | All water objects scale = (1,1,1). |
+| **Material setup** | 5 | Transparent URP Lit. Blue-green tint. High smoothness. Correct blend mode. |
+| **Hierarchy** | 4 | Clean: Water → RiverWater, Lake_N, Pond_N, WaterExclusionZones. |
+| **Exclusion data** | 5 | Stored and queryable. Correct margins per water type. |
+| **Performance** | 3 | Generation under 10 seconds. No editor freeze. |
 
 ### Score Bands
 
 | Range | Meaning |
 |-------|---------|
-| **0-25** | Broken or no visible water |
-| **26-50** | Some water exists but wrong placement, buried surfaces, or no terrain refresh |
-| **51-70** | Water system works but missing types, poor carving, or incomplete rebake |
-| **71-85** | Good water system, minor issues with shorelines or refresh |
-| **86-100** | Excellent: all three water types, natural placement, full terrain refresh |
+| **0-25** | No visible water or terrain was modified |
+| **26-50** | River exists but buried/floating or terrain was carved |
+| **51-70** | River works, minor elevation issues |
+| **71-85** | Good river, optional water bodies present |
+| **86-100** | Excellent: river fills channel perfectly, terrain untouched, clean hierarchy |
 
 ---
 
@@ -280,31 +186,37 @@ Inputs (honor these if specified, otherwise use defaults):
 
 | Goal | What to do |
 |------|------------|
-| Water buried in terrain | Increase waterDepth offset. Check basin was actually carved. |
-| Lake shoreline too circular | Add more control points with wider noise amplitude (0.6x-1.4x). |
-| Cliff edges on carved basin | Use cosine falloff, not linear. Increase bankWidth. |
-| Pond on mountainside | Enforce slope < 0.15 and height < 50% checks. |
-| Grass in water | Check grass mask rebake excludes water bodies + shorelineMargin. |
-| Splat map wrong after carving | Recompute splat weights from post-carve heights/slopes. |
-| River water not flowing downhill | Water surface Y must descend along RiverPath direction. |
-| Lake overlaps river awkwardly | Open the shoreline polygon where river enters/exits. Match water levels. |
-| Too few/many water bodies | Check count scaling rules vs map size. |
+| Water buried in terrain | Increase Y offset above terrain (try 0.4-0.5). |
+| Water floating above channel | Decrease Y offset (try 0.2-0.3). |
+| River missing at map edges | Extend polyline BEYOND terrain bounds. Clamp raycasts to bounds, extrapolate Y. |
+| Raycasts miss terrain | Clamp XZ to terrain bounds before raycasting. Interpolate for out-of-bounds points. |
+| Terrain was modified | WRONG. Undo all terrain changes. Water only ADDS meshes, never modifies terrain. |
+| Want lakes on small map | Don't. Lakes are optional and only for maps > 500x500 with suitable terrain. |
+| Too many ponds | Reduce count. Ponds are bonus, not required. |
 
 ---
 
 ## Technical Notes
 
-### Why one rebake pass?
-Carving multiple basins then rebaking once is both faster and simpler than rebaking after each water body. The rebake algorithms (height tint, normal map, splat map, grass mask) are expensive — running them N times wastes time and risks inconsistency.
+### Why no terrain carving?
+Previous benchmark iterations tried carving basins for lakes/ponds. This created problems:
+1. Undoing carving if something goes wrong is nearly impossible.
+2. It violates layer isolation — each layer should only ADD, not modify previous layers.
+3. Real water fills existing low terrain. Carving is artificial.
+4. The river valley is already carved during terrain generation (Layer 1) — that's the right place for it.
 
-### Water material
-All water types share one material. Visual differences come from mesh shape and size, not material variation. A single transparent URP Lit material with blue-green tint reads well for rivers, lakes, and ponds. A more advanced benchmark tier could test animated water shaders.
+### Water surface elevation
+The water Y should be terrain surface + 0.3 units. Too low and it's invisible (buried). Too high and it floats visibly above the channel walls. 0.3 is a sweet spot that looks like the channel is filled with water.
 
 ### River mesh construction
-The quad-strip approach (two vertices per sample, connected into quads along the path) produces a clean, continuous mesh that follows curves naturally. This is the standard technique for ribbon/river rendering on arbitrary paths.
+The quad-strip approach (two vertices per sample along path) produces a clean ribbon mesh. Key: compute forward direction, then perpendicular (right = cross(up, forward)), emit left/right vertices at center ± right * halfWidth.
 
-### Lake-river intersection
-When a lake sits on a river, the lake effectively widens the river into a pool. The shoreline polygon should have a gap where the river enters and exits. The water levels must match — if they don't, there will be a visible step in the water surface.
+### Handling beyond-bounds points
+The river extends off the map. Raycasts at those positions miss the terrain. Solution: clamp the raycast XZ to within terrain bounds, get the height at the clamped position, use that as the water Y for the beyond-bounds segment.
 
-### Exclusion zone margins
-Different object types have different shoreline clearances. Trees need the most space (full margin). Bushes can be closer (natural shoreline vegetation). Rocks can be ON the bank (partially submerged boulders look natural). These margins are stored with the exclusion data so downstream layers can query per-type distances.
+### Layer isolation principle
+Each benchmark layer operates on top of previous layers without modifying them:
+- Layer 1 (Terrain): Creates mesh, textures, grass. FINAL.
+- Layer 2 (Splat): Adds texture detail. Does not modify mesh. FINAL.
+- Layer 3 (Water): Adds water surfaces. Does not modify mesh or textures. FINAL.
+- Layer 4+ (Objects): Places objects via raycast. Does not modify anything above.
