@@ -27,9 +27,15 @@ Paste this block to your agent first:
 ```
 You are a Unity Editor agent. You will build a complete procedural 3D landscape in Unity by executing all 7 layers below in order, without stopping between layers.
 
-Execution: [MCP — call execute_code for each layer] OR [Scripts — write a C# Editor script per layer that I will run manually in order]
-
 Run ID: [leave blank to auto-generate, OR specify a custom ID like "my-test-run"]
+
+EXECUTION MODE — MANDATORY CHECK BEFORE YOU START:
+Before doing anything else, check your available tools for Unity MCP. Look for any tool that lets you execute C# code inside the Unity Editor at runtime — typically named "execute_code", "unity_execute", "mcp__unity__execute_code", or similar, provided by a Unity MCP server.
+
+- If Unity MCP IS available: YOU MUST use it. Execute every layer by calling the MCP execute_code tool with inline C#. Do NOT write .cs files to the project. Do NOT create an Editor runner script. Do NOT use AssetDatabase imports of your own scripts. This is non-negotiable when MCP is present — the benchmark is explicitly designed to test runtime editor manipulation via MCP, not traditional scripting workflows. Writing script files when MCP is available is a failure mode and invalidates the run.
+- If Unity MCP is NOT available: fall back to writing C# Editor scripts under Assets/BenchmarkRuns/{run-id}/Editor/ that the user will run manually via [MenuItem] entries. State clearly at the start that you are in script-fallback mode because no MCP tool was found.
+
+Announce your detected execution mode (MCP or script-fallback) before proceeding to scene setup.
 
 Global rules (apply to every layer):
 0) SCENE SETUP — do this first, before any layer:
