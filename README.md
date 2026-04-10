@@ -1,6 +1,6 @@
 # Darko Unity LLM Intelligence Benchmark Test
 
-A reproducible benchmark for testing whether AI coding agents can generate procedural 3D worlds inside the Unity Editor — by driving the editor directly through [Unity MCP](https://github.com/niceholmgren/mcp-for-unity), or by writing C# scripts the user runs in the editor.
+A reproducible benchmark for testing whether AI coding agents can generate procedural 3D worlds inside the Unity Editor — by driving the editor directly through [Unity MCP](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial), or by writing C# scripts the user runs in the editor.
 
 ## What this tests
 
@@ -10,7 +10,7 @@ Can an AI agent build a realistic landscape with terrain, water, and props by ge
 
 - **Unity 2022.3+** with **URP** (Universal Render Pipeline)
 - An AI coding agent (Claude Code, Cursor, Windsurf, Copilot, etc.)
-- **Unity MCP server** (recommended) — [mcp-for-unity](https://github.com/niceholmgren/mcp-for-unity)
+- **Unity MCP server** (recommended) — [setup guide](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial)
 
 ## How agents should work
 
@@ -20,7 +20,7 @@ There are two valid execution paths:
 
 The agent executes C# code directly in the Unity Editor through Unity MCP's `execute_code` tool. No script files are written — code runs immediately at runtime like an editor console. This is the fastest feedback loop and the preferred path.
 
-**Setup:** Install and connect the [Unity MCP server](https://github.com/niceholmgren/mcp-for-unity), then use an agent that supports MCP tool calling.
+**Setup:** Follow the [Unity MCP setup guide](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial) to install and connect the server, then use an agent that supports MCP tool calling.
 
 ### Path B — C# scripts (no MCP required)
 
@@ -33,7 +33,7 @@ The agent writes `.cs` Editor scripts into your Assets folder. Each script uses 
 ### Step 1 — Set up Unity
 
 - Create a Unity 2022.3+ project with **URP** (Universal Render Pipeline) configured
-- *(Optional)* Install [Unity MCP](https://github.com/niceholmgren/mcp-for-unity) for Path A
+- *(Optional)* Install [Unity MCP](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial) for Path A
 
 ### Step 2 — Start the benchmark
 
