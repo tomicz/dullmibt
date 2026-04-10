@@ -30,6 +30,26 @@ Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learni
 
 ---
 
+## Run isolation (required)
+
+Each benchmark run must be fully self-contained so you can compare results from different agents side by side without contamination.
+
+**Before starting a run, choose a run ID** — for example `claude-code-2026-04-10`, `codex-2026-04-10`, `cursor-2026-04-10`. All assets and the scene for that run live under one folder:
+
+```
+Assets/BenchmarkRuns/{run-id}/
+  Materials/
+  Textures/
+  Settings/
+  run-scene.unity       ← open this scene to review the run
+```
+
+**Never write to `Assets/Materials/`, `Assets/Textures/`, or any shared folder.** All asset paths use `Assets/BenchmarkRuns/{run-id}/` as the root. This ensures that opening an older run's scene still shows exactly what that agent produced.
+
+To review a run: open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. To start a fresh run: pick a new run ID — previous runs are untouched.
+
+---
+
 ## How to prompt the same (agent instructions)
 
 ### Execution paths
@@ -42,21 +62,25 @@ Both paths are valid for the benchmark. Path A is recommended because it elimina
 
 ---
 
-Give your model a **single system-style block** like this (adapt to your execution path):
+Give your model a **single system-style block** like this (fill in your run ID and execution path):
 
 ```text
 You are a Unity Editor agent. You will build a procedural 3D landscape in Unity, layer by layer.
 
 Execution: [MCP — call execute_code for each layer] OR [Scripts — write a C# Editor script per layer that I will run manually]
 
+Run output path: Assets/BenchmarkRuns/{run-id}/
+Scene path: Assets/BenchmarkRuns/{run-id}/run-scene.unity
+
 Benchmark rules:
 1) Follow the layer plan in darko-unity-llm-intelligence-benchmark-test.md strictly in order.
-2) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors.
-3) When terrain geometry changes (water system carving), rebake ALL terrain textures (height, normal, tint, splat, composites), reassign materials.
-4) Placement: use world-placement-delegator rules—downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
-5) Scale is ALWAYS (1,1,1). Map size controlled by localSizeX/Z. Noise uses world-space coordinates.
-6) Output: per-layer summary (counts, key asset paths, material slots assigned).
-7) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch by the agent's own code. Do NOT reuse existing asset files from the project. If a file already exists at the target path, delete it first and regenerate. The benchmark tests whether the agent can CREATE these assets — not whether it can find and assign pre-made ones. Reusing existing files produces identical worlds across runs and invalidates the benchmark.
+2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder. This keeps each run self-contained and comparable.
+3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors.
+4) When terrain geometry changes (water system carving), rebake ALL terrain textures (height, normal, tint, splat, composites), reassign materials.
+5) Placement: use world-placement-delegator rules—downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
+6) Scale is ALWAYS (1,1,1). Map size controlled by localSizeX/Z. Noise uses world-space coordinates.
+7) Output: per-layer summary (counts, key asset paths, material slots assigned).
+8) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch by the agent's own code. Do NOT reuse existing asset files from the project. If a file already exists at the target path, delete it first and regenerate. The benchmark tests whether the agent can CREATE these assets — not whether it can find and assign pre-made ones. Reusing existing files produces identical worlds across runs and invalidates the benchmark.
 ```
 
 Then attach or point the model at the **Prompts** listed below—those files are the **authoritative copy/paste prompts** for each subsystem.

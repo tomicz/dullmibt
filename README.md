@@ -51,8 +51,23 @@ The agent writes `.cs` Editor scripts into your Assets folder. Each script uses 
 
 Each layer builds on top of the previous one. Never skip layers. Each layer only ADDS to the scene — it must not modify previous layers' output.
 
+## Run isolation
+
+Each run must be fully self-contained so you can compare results from multiple agents (e.g. Claude Code, Codex, Cursor) without contamination.
+
+Pick a run ID before starting — e.g. `claude-code-2026-04-10`. All assets and the scene for that run go under:
+
+```
+Assets/BenchmarkRuns/{run-id}/
+```
+
+The agent must never write to shared folders like `Assets/Materials/` or `Assets/Textures/`. To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Previous runs are untouched.
+
+See `darko-unity-llm-intelligence-benchmark-test.md` for the full agent instructions block.
+
 ## Key rules
 
+- **Run isolation**: All assets saved under `Assets/BenchmarkRuns/{run-id}/`. Never write to shared folders.
 - **Fresh generation**: Every texture, material, and mesh must be generated from scratch by the agent. No reusing existing asset files.
 - **Scale (1,1,1)**: All objects use `transform.localScale = (1,1,1)`. Map size is controlled by mesh geometry, not transform scale.
 - **Layer isolation**: Each layer only adds — never modifies previous layers' terrain, textures, or water.
