@@ -29,16 +29,17 @@ You are a Unity Editor agent. You will build a complete procedural 3D landscape 
 
 Run ID: [leave blank to auto-generate, OR specify a custom ID like "my-test-run"]
 
-EXECUTION MODE — MANDATORY CHECK BEFORE YOU START:
-Before doing anything else, check your available tools for Unity MCP. Look for any tool that lets you execute C# code inside the Unity Editor at runtime — typically named "execute_code", "unity_execute", "mcp__unity__execute_code", or similar, provided by a Unity MCP server.
+STEP 1 — EXECUTION MODE DETECTION (do this first, before anything else):
+Check your available tools for Unity MCP. Look for any tool that lets you execute C# code inside the Unity Editor at runtime — typically named "execute_code", "unity_execute", "mcp__unity__execute_code", or similar, provided by a Unity MCP server.
 
 - If Unity MCP IS available: YOU MUST use it. Execute every layer by calling the MCP execute_code tool with inline C#. Do NOT write .cs files to the project. Do NOT create an Editor runner script. Do NOT use AssetDatabase imports of your own scripts. This is non-negotiable when MCP is present — the benchmark is explicitly designed to test runtime editor manipulation via MCP, not traditional scripting workflows. Writing script files when MCP is available is a failure mode and invalidates the run.
 - If Unity MCP is NOT available: fall back to writing C# Editor scripts under Assets/BenchmarkRuns/{run-id}/Editor/ that the user will run manually via [MenuItem] entries. State clearly at the start that you are in script-fallback mode because no MCP tool was found.
 
-Announce your detected execution mode (MCP or script-fallback) before proceeding to scene setup.
+Announce your detected execution mode (MCP or script-fallback).
 
-Global rules (apply to every layer):
-0) SCENE SETUP — do this first, before any layer:
+STEP 2 — SCENE SETUP (the VERY NEXT thing, before Layer 1 and before any generation code):
+This step is critical. If MCP is available, the VERY FIRST execute_code call you make must be this scene setup — nothing else comes before it. Do not generate terrain, materials, or anything else until the new scene is created, opened as active, and saved.
+
    a) Determine the run ID:
       - If the user specified a custom Run ID above, use it.
       - Otherwise, auto-generate: "{your-name}-{YYYY-MM-DD}".
@@ -53,11 +54,32 @@ Global rules (apply to every layer):
         - YYYY-MM-DD: get from C# System.DateTime.Now.ToString("yyyy-MM-dd").
       - Collision handling: if Assets/BenchmarkRuns/{run-id}/ already exists, append
         "-HHmm" from System.DateTime.Now to make it unique.
-      - Announce the final run ID to the user before proceeding.
-   b) Create a brand new empty scene using EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single).
-   c) Ensure the run folder exists: AssetDatabase.CreateFolder as needed to create Assets/BenchmarkRuns/{run-id}/.
-   d) Immediately save the new scene to Assets/BenchmarkRuns/{run-id}/run-scene.unity using EditorSceneManager.SaveScene.
-   e) Do NOT work in the existing active scene. Do NOT reset or modify any existing scene. Always create fresh.
+      - Announce the final run ID to the user.
+
+   b) Create the run folder BEFORE creating the scene:
+      - Use AssetDatabase.CreateFolder recursively to ensure Assets/BenchmarkRuns/{run-id}/ exists.
+      - Call AssetDatabase.Refresh() after creating folders.
+
+   c) Create a brand new empty scene AND open it as the active scene:
+      var newScene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+      - NewSceneMode.Single REPLACES the current scene and makes the new scene active. This is intentional — the existing scene must NOT be modified.
+      - Verify: EditorSceneManager.GetActiveScene() should return the new scene.
+
+   d) Immediately save the new scene to disk at the run folder path:
+      EditorSceneManager.SaveScene(newScene, "Assets/BenchmarkRuns/{run-id}/run-scene.unity");
+      - This makes the scene persistent and tied to the run folder.
+      - After saving, verify the file exists at that path before continuing.
+
+   e) Verify the active scene is now the run scene:
+      EditorSceneManager.GetActiveScene().path must equal "Assets/BenchmarkRuns/{run-id}/run-scene.unity".
+      If it does not, STOP and report the failure. Do not proceed to Layer 1.
+
+   f) HARD RULE: do NOT work in, modify, or reset any pre-existing scene. Always create fresh. If the previous active scene had unsaved changes, discard them (NewSceneMode.Single handles this — do not prompt).
+
+Only after scene setup is complete and verified, proceed to Layer 1.
+
+Global rules (apply to every layer after scene setup):
+0) Before starting Layer 1, confirm scene setup (Step 2 above) completed successfully and the active scene is the run scene.
 1) Execute all 7 layers in order. Do not stop between layers unless an error requires human input.
 2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
 3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Save the scene (EditorSceneManager.SaveScene). Report layer completion before proceeding.
