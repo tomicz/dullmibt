@@ -26,9 +26,14 @@ Run output path: Assets/BenchmarkRuns/{run-id}/
 Scene path: Assets/BenchmarkRuns/{run-id}/run-scene.unity
 
 Global rules (apply to every layer):
+0) SCENE SETUP — do this first, before any layer:
+   - Create a brand new empty scene using EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single).
+   - Ensure the run folder exists: AssetDatabase.CreateFolder as needed to create Assets/BenchmarkRuns/{run-id}/.
+   - Immediately save the new scene to Assets/BenchmarkRuns/{run-id}/run-scene.unity using EditorSceneManager.SaveScene.
+   - Do NOT work in the existing active scene. Do NOT reset or modify any existing scene. Always create fresh.
 1) Execute all 7 layers in order. Do not stop between layers unless an error requires human input.
 2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
-3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Report layer completion before proceeding.
+3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Save the scene (EditorSceneManager.SaveScene). Report layer completion before proceeding.
 4) Scale is ALWAYS (1,1,1) for every GameObject. Map size controlled by localSizeX/Z. Noise uses world-space coordinates directly.
 5) Each layer only ADDS to the scene. Never modify previous layers' terrain mesh, textures, water, props, or lighting.
 6) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch by your own code. If a file already exists at the target path, delete it first and regenerate.

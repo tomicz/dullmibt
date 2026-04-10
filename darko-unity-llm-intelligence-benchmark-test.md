@@ -73,14 +73,19 @@ Run output path: Assets/BenchmarkRuns/{run-id}/
 Scene path: Assets/BenchmarkRuns/{run-id}/run-scene.unity
 
 Benchmark rules:
-1) Follow the layer plan in darko-unity-llm-intelligence-benchmark-test.md strictly in order.
-2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder. This keeps each run self-contained and comparable.
-3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors.
+0) SCENE SETUP — do this first, before any layer:
+   Create a new empty scene: EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single).
+   Create the run folder: AssetDatabase.CreateFolder as needed for Assets/BenchmarkRuns/{run-id}/.
+   Save the scene immediately: EditorSceneManager.SaveScene to Assets/BenchmarkRuns/{run-id}/run-scene.unity.
+   Do NOT work in the existing active scene. Do NOT reset or modify any existing scene.
+1) Follow the layer plan strictly in order.
+2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
+3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Save the scene (EditorSceneManager.SaveScene).
 4) When terrain geometry changes (water system carving), rebake ALL terrain textures (height, normal, tint, splat, composites), reassign materials.
-5) Placement: use world-placement-delegator rules—downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
+5) Placement: downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
 6) Scale is ALWAYS (1,1,1). Map size controlled by localSizeX/Z. Noise uses world-space coordinates.
 7) Output: per-layer summary (counts, key asset paths, material slots assigned).
-8) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch by the agent's own code. Do NOT reuse existing asset files from the project. If a file already exists at the target path, delete it first and regenerate. The benchmark tests whether the agent can CREATE these assets — not whether it can find and assign pre-made ones. Reusing existing files produces identical worlds across runs and invalidates the benchmark.
+8) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch. If a file already exists at the target path, delete it first and regenerate.
 ```
 
 Then attach or point the model at the **Prompts** listed below—those files are the **authoritative copy/paste prompts** for each subsystem.
