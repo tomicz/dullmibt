@@ -21,7 +21,7 @@ Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learni
 
 | Axis                 | What “good” looks like                                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Layer discipline** | Executes terrain → placement-dependent content → water → sky → polish in order; reruns visual refresh when geometry changes. |
+| **Layer discipline** | Executes terrain → water → props in order; reruns visual refresh when geometry changes. |
 | **Ground truth**     | Uses raycasts to `ProceduralMeshGround`, respects colliders, no floating bases.                                              |
 | **Materials**        | URP Lit where available; normal + mask + optional height/parallax; correct texture import settings.                          |
 | **Scale sanity**     | Scale is always (1,1,1). Size controlled by mesh geometry (localSizeX/Z), not transform scale.                               |
@@ -87,21 +87,12 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Key rules:** Each prop uses seeded random for uniqueness. Placement respects terrain zones — no props on peaks, cliffs, or in water. Natural distribution with noise-based clustering and clearings.
 - **Scoring:** 100-point rubric covering placement quality (40), prop quality (30), technical quality (20), visual quality (10).
 
-### Layer 5 — Sky: volumetric-style clouds (primitive-based)
-
-- **Primary prompt:** [context/generate-volumetric-cloud.md](context/generate-volumetric-cloud.md)  
-- **Benchmark extension:** raise cloud height band; elongate groups; disable cloud shadow casting for ground readability (see graphics prompts).
-
-### Layer 6 — Horizon closure (optional hard tier)
+### Layer 5 — Horizon closure (optional hard tier)
 
 - Procedural **mountain ring** outside play bounds so the horizon is not infinite void.  
 - Not in a separate prompt file—tests whether the model can invent stable large meshes + placement without breaking Layer 1 rules.
 
-### Layer 7 — Lighting, shadows, post-processing
-
-- **Primary prompt:** [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)  
-
-### Layer 8 — Performance tier (optional)
+### Layer 6 — Performance tier (optional)
 
 - Add `LODGroup` on heavy chunk roots; tune `QualitySettings.lodBias`, URP `shadowDistance`, fog density vs clarity.  
 - Tests trade-offs without destroying art direction.
@@ -122,8 +113,6 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
 | [context/biome-temperate-forest.md](context/biome-temperate-forest.md)                     | Temperate forest biome definition             |
-| [context/generate-volumetric-cloud.md](context/generate-volumetric-cloud.md)               | Cloud systems from primitives                 |
-| [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)   | Lighting and visual polish pass               |
 
 
 ---
