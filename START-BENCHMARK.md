@@ -171,11 +171,15 @@ Requirements:
        k = [0.003, 0.008, 0.020, 0.050, 0.120]
        a = [110,   38,    14,    5,     2   ]
      (Use seeded per-octave offsets so different runs produce different worlds.)
-   - Continental tilt: bias the south edge lower so water has somewhere to drain to.
-       tilt = 35 * ((wz - minZ) / (maxZ - minZ) - 0.5)   // negative on the south half
+   - Gentle continental tilt: bias one edge lower so water has somewhere to drain to.
+     Keep this small — erosion + Priority-Flood do the real basin work, the tilt is
+     only here to break perfect symmetry and give rivers a preferred outflow direction.
+       tilt = 12 * ((wz - minZ) / (maxZ - minZ) - 0.5)
        h   = fbm(wxw, wzw) - tilt
-   - Lowland flatten (keeps depressions readable as basins, not abyss):
-       if (h < 0) h *= 0.22;
+   - Do NOT post-flatten lowlands. Earlier specs multiplied negative heights by a small
+     constant to "keep basins readable", but this turns most of the map into a
+     featureless pancake when combined with the tilt. Erosion (Step 5) and the
+     Priority-Flood depression fill (Step 6) already produce natural drainable basins.
    - Store the result as a width*height float[] DEM. This DEM is the working surface
      for all subsequent hydrology steps.
 
