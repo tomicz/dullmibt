@@ -27,11 +27,15 @@ Global rules (apply to every layer):
 0) SCENE SETUP — do this first, before any layer:
    a) Determine the run ID:
       - If the user specified a custom Run ID above, use it.
-      - Otherwise, auto-generate: "{your-model-name}-{YYYY-MM-DD}".
-        - your-model-name: your best honest self-identification as a single lowercase slug
-          (e.g. "claude-opus-4-6", "claude-sonnet-4-6", "gpt-5", "codex", "cursor-sonnet",
-          "gemini-2-5-pro"). Use hyphens, no spaces, no version guessing beyond what you
-          actually know — if unsure of the exact version, use the family name only.
+      - Otherwise, auto-generate: "{your-name}-{YYYY-MM-DD}".
+        - your-name: your best honest self-identification as a single lowercase slug, in this
+          order of preference:
+            1) Exact model if you know it (e.g. "claude-opus-4-6", "gpt-5", "gemini-2-5-pro")
+            2) Model family if unsure of version (e.g. "claude-opus", "gpt", "gemini")
+            3) Wrapper/tool name if you don't know the model (e.g. "codex", "cursor",
+               "windsurf", "claude-code", "copilot")
+            4) "unknown-agent" as a last resort
+          Use hyphens, no spaces. Do not guess versions you don't actually know.
         - YYYY-MM-DD: get from C# System.DateTime.Now.ToString("yyyy-MM-dd").
       - Collision handling: if Assets/BenchmarkRuns/{run-id}/ already exists, append
         "-HHmm" from System.DateTime.Now to make it unique.
