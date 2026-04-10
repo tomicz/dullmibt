@@ -96,6 +96,14 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Key rules:** Does NOT modify terrain, water, or props. Lighting and rendering settings only.
 - **Scoring:** 100-point rubric covering lighting quality (35), post-processing quality (35), environment quality (20), technical quality (10).
 
+### Layer 6 — Sky & clouds (primitive-based)
+
+- **Primary prompt:** [context/generate-sky-clouds.md](context/generate-sky-clouds.md)  
+- **Requires:** Layers 1-4 completed. Terrain bounds needed for cloud altitude.
+- **Deliverables:** `Clouds` parent with 15-25 cloud groups, each built from 8-20 overlapping sphere primitives. Mix of cumulus, wisp, and small puff types. Shared opaque white material. No shadow casting.
+- **Key rules:** Clouds are high above terrain (120m+ above max height). Shadow casting OFF. Does NOT modify any previous layer.
+- **Scoring:** 100-point rubric covering cloud shape quality (35), distribution quality (30), technical quality (25), visual quality (10).
+
 ---
 
 ## Core prompt library (all `.md` files in this benchmark)
@@ -112,6 +120,7 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
 | [context/generate-lighting-post-processing.md](context/generate-lighting-post-processing.md) | Lighting, shadows, post-processing            |
+| [context/generate-sky-clouds.md](context/generate-sky-clouds.md)                           | Sky & clouds from primitives                  |
 
 
 
