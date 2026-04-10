@@ -8,29 +8,38 @@
 
 ## Before you begin
 
-Pick a **run ID** — e.g. `claude-code-2026-04-10`, `codex-2026-04-10`, `cursor-2026-04-10`.
-Replace every `{run-id}` below with your run ID before sending to the agent.
+The benchmark auto-generates a run ID based on the agent name + today's date, so you don't have to pick one manually. You CAN override it by specifying a custom ID in the prompt below if you want.
 
 ---
 
 ## Agent Instructions
 
-Paste this block to your agent first (fill in run ID and execution path):
+Paste this block to your agent first:
 
 ```
 You are a Unity Editor agent. You will build a complete procedural 3D landscape in Unity by executing all 7 layers below in order, without stopping between layers.
 
 Execution: [MCP — call execute_code for each layer] OR [Scripts — write a C# Editor script per layer that I will run manually in order]
 
-Run output path: Assets/BenchmarkRuns/{run-id}/
-Scene path: Assets/BenchmarkRuns/{run-id}/run-scene.unity
+Run ID: [leave blank to auto-generate, OR specify a custom ID like "my-test-run"]
 
 Global rules (apply to every layer):
 0) SCENE SETUP — do this first, before any layer:
-   - Create a brand new empty scene using EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single).
-   - Ensure the run folder exists: AssetDatabase.CreateFolder as needed to create Assets/BenchmarkRuns/{run-id}/.
-   - Immediately save the new scene to Assets/BenchmarkRuns/{run-id}/run-scene.unity using EditorSceneManager.SaveScene.
-   - Do NOT work in the existing active scene. Do NOT reset or modify any existing scene. Always create fresh.
+   a) Determine the run ID:
+      - If the user specified a custom Run ID above, use it.
+      - Otherwise, auto-generate: "{your-model-name}-{YYYY-MM-DD}".
+        - your-model-name: your best honest self-identification as a single lowercase slug
+          (e.g. "claude-opus-4-6", "claude-sonnet-4-6", "gpt-5", "codex", "cursor-sonnet",
+          "gemini-2-5-pro"). Use hyphens, no spaces, no version guessing beyond what you
+          actually know — if unsure of the exact version, use the family name only.
+        - YYYY-MM-DD: get from C# System.DateTime.Now.ToString("yyyy-MM-dd").
+      - Collision handling: if Assets/BenchmarkRuns/{run-id}/ already exists, append
+        "-HHmm" from System.DateTime.Now to make it unique.
+      - Announce the final run ID to the user before proceeding.
+   b) Create a brand new empty scene using EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single).
+   c) Ensure the run folder exists: AssetDatabase.CreateFolder as needed to create Assets/BenchmarkRuns/{run-id}/.
+   d) Immediately save the new scene to Assets/BenchmarkRuns/{run-id}/run-scene.unity using EditorSceneManager.SaveScene.
+   e) Do NOT work in the existing active scene. Do NOT reset or modify any existing scene. Always create fresh.
 1) Execute all 7 layers in order. Do not stop between layers unless an error requires human input.
 2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
 3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Save the scene (EditorSceneManager.SaveScene). Report layer completion before proceeding.

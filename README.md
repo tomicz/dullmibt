@@ -51,17 +51,17 @@ Each layer section in `START-BENCHMARK.md` includes a 100-point rubric. Total sc
 
 ## Run isolation
 
-Each run must be fully self-contained so you can compare results from multiple agents (e.g. Claude Code, Codex, Cursor) without contamination.
+Each run is fully self-contained so you can compare results from multiple agents (e.g. Claude, Codex, Cursor) without contamination.
 
-Pick a run ID before starting — e.g. `claude-code-2026-04-10`. All assets and the scene for that run go under:
+The agent **auto-generates** a run ID from its model name and today's date — e.g. `claude-opus-4-6-2026-04-10/`, `gpt-5-2026-04-10/`, `codex-2026-04-10/`. You can also specify a custom run ID in the prompt if you want.
+
+All assets and the scene for a run live under:
 
 ```
 Assets/BenchmarkRuns/{run-id}/
 ```
 
-The agent must never write to shared folders like `Assets/Materials/` or `Assets/Textures/`. To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Previous runs are untouched.
-
-See `darko-unity-llm-intelligence-benchmark-test.md` for the full agent instructions block.
+To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Previous runs are untouched.
 
 ## Key rules
 
