@@ -30,26 +30,41 @@ The agent writes `.cs` Editor scripts into your Assets folder. Each script uses 
 
 ## How to run
 
-1. Open a Unity project with URP configured
-2. Clone this repo into your project's `Assets/` folder
-3. *(Optional)* Install and connect the Unity MCP server for Path A
-4. Give your agent the benchmark rules from `darko-unity-llm-intelligence-benchmark-test.md`
-5. Feed the agent each layer prompt in order (Layer 1 through Layer 7)
-6. Score results using the rubrics in each prompt file
+### Step 1 — Set up Unity
 
-## Layer plan (execute in order)
+- Create a Unity 2022.3+ project with **URP** (Universal Render Pipeline) configured
+- Clone this repo into your project's `Assets/` folder
 
-| Layer | What it builds | Prompt file |
-|-------|---------------|-------------|
-| **1** | Terrain + surface PBR | `context/terrain/generate-realistic-terrain.md` |
-| **2** | Terrain splat mapping | `context/terrain/generate-terrain-splat-map.md` |
-| **3** | Water system (river, lakes, ponds) | `context/terrain/generate-water-system.md` |
-| **4** | Props (trees, rocks) | `context/generate-props.md` |
-| **5** | Lighting & post-processing | `context/generate-lighting-post-processing.md` |
-| **6** | Sky & clouds | `context/generate-sky-clouds.md` |
-| **7** | Horizon closure | `context/generate-horizon-closure.md` |
+### Step 2 — Choose your execution path
 
-Each layer builds on top of the previous one. Never skip layers. Each layer only ADDS to the scene — it must not modify previous layers' output.
+- **Path A (MCP):** Install and connect the [Unity MCP server](https://github.com/niceholmgren/mcp-for-unity)
+- **Path B (scripts):** No setup needed — the agent will write `.cs` files you run manually
+
+### Step 3 — Pick a run ID
+
+Choose a unique name for this run, e.g. `claude-code-2026-04-10`. You'll use this in the next step. Every run gets its own isolated folder so you can compare agents later.
+
+### Step 4 — Give your agent the system prompt
+
+Open `darko-unity-llm-intelligence-benchmark-test.md` and copy the agent instructions block. Fill in your **run ID** and **execution path**, then paste it to your agent as the first message (or system prompt).
+
+### Step 5 — Run each layer in order
+
+For each layer (1 through 7), copy the full contents of the layer's prompt file and send it to your agent. Wait for the layer to complete and verify before moving to the next.
+
+| Layer | Prompt file |
+|-------|-------------|
+| 1 — Terrain | `context/terrain/generate-realistic-terrain.md` |
+| 2 — Splat map | `context/terrain/generate-terrain-splat-map.md` |
+| 3 — Water | `context/terrain/generate-water-system.md` |
+| 4 — Props | `context/generate-props.md` |
+| 5 — Lighting | `context/generate-lighting-post-processing.md` |
+| 6 — Sky & clouds | `context/generate-sky-clouds.md` |
+| 7 — Horizon | `context/generate-horizon-closure.md` |
+
+### Step 6 — Score the result
+
+Each layer prompt includes a 100-point rubric at the bottom. Score each layer and total the results.
 
 ## Run isolation
 
