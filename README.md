@@ -73,6 +73,8 @@ To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Pre
 
 ## Scoring
 
+> **Note:** Scoring is still a work in progress and will be implemented properly soon. Measuring what looks "good" visually is genuinely hard, so the current rubrics are a rough guide rather than a final system.
+
 Each layer in `START-BENCHMARK.md` includes a 100-point scoring rubric. Total score is out of 700 across all 7 layers. Layer 1 has a map size multiplier (0.5x–1.3x) that applies to its score.
 
 ## Community
