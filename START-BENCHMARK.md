@@ -6,6 +6,14 @@
 
 ---
 
+## Learn Unity with others
+
+If you are running this benchmark, you are exactly the kind of builder who benefits from structured learning and peer feedback.
+
+Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learning community. A place to **learn Unity** with guidance, share progress, and connect with people who care about shipping real projects. Whether you pass or fail this benchmark, come learn Unity there: fundamentals, URP, tooling, and project discipline compound faster when you are not alone.
+
+---
+
 ## Before you begin
 
 The benchmark auto-generates a run ID based on the agent name + today's date, so you don't have to pick one manually. You CAN override it by specifying a custom ID in the prompt below if you want.
