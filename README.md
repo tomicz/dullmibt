@@ -37,6 +37,7 @@ If your agent starts creating `.cs` files in your Assets folder instead of calli
 | **2** | Terrain splat mapping | `context/terrain/generate-terrain-splat-map.md` |
 | **3** | Water system (river, lakes, ponds) | `context/terrain/generate-water-system.md` |
 | **4** | Props (trees, rocks) | `context/generate-props.md` |
+| **5** | Lighting & post-processing | `context/generate-lighting-post-processing.md` |
 
 Each layer builds on top of the previous one. Never skip layers. Each layer only ADDS to the scene — it must not modify previous layers' output.
 

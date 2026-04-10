@@ -21,7 +21,7 @@ Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learni
 
 | Axis                 | What “good” looks like                                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Layer discipline** | Executes terrain → water → props in order; reruns visual refresh when geometry changes. |
+| **Layer discipline** | Executes terrain → water → props → lighting in order; reruns visual refresh when geometry changes. |
 | **Ground truth**     | Uses raycasts to `ProceduralMeshGround`, respects colliders, no floating bases.                                              |
 | **Materials**        | URP Lit where available; normal + mask + optional height/parallax; correct texture import settings.                          |
 | **Scale sanity**     | Scale is always (1,1,1). Size controlled by mesh geometry (localSizeX/Z), not transform scale.                               |
@@ -88,6 +88,14 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Key rules:** Each prop uses seeded random for uniqueness. Placement respects terrain zones — no props on peaks, cliffs, or in water. Natural distribution with noise-based clustering and clearings.
 - **Scoring:** 100-point rubric covering placement quality (40), prop quality (30), technical quality (20), visual quality (10).
 
+### Layer 5 — Lighting & post-processing
+
+- **Primary prompt:** [context/generate-lighting-post-processing.md](context/generate-lighting-post-processing.md)  
+- **Requires:** Layers 1-4 completed. URP active. Camera in scene.
+- **Deliverables:** Directional light (Sun) with warm color and soft shadows, gradient ambient lighting, post-processing Volume with ACES tonemapping, bloom, color grading, vignette, SSAO. Optional distance fog for atmosphere.
+- **Key rules:** Does NOT modify terrain, water, or props. Lighting and rendering settings only.
+- **Scoring:** 100-point rubric covering lighting quality (35), post-processing quality (35), environment quality (20), technical quality (10).
+
 ---
 
 ## Core prompt library (all `.md` files in this benchmark)
@@ -103,6 +111,7 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/generate-props.md](context/generate-props.md)                                     | Props placement: trees, rocks                 |
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
+| [context/generate-lighting-post-processing.md](context/generate-lighting-post-processing.md) | Lighting, shadows, post-processing            |
 
 
 
