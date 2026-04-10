@@ -44,6 +44,7 @@ Benchmark rules:
 4) Placement: use world-placement-delegator rules—downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
 5) Scale is ALWAYS (1,1,1). Map size controlled by localSizeX/Z. Noise uses world-space coordinates.
 6) Output: per-layer summary (counts, key asset paths, material slots assigned).
+7) FRESH GENERATION: Every texture, material, and mesh must be generated from scratch by the agent's own code. Do NOT reuse existing asset files from the project. If a file already exists at the target path, delete it first and regenerate. The benchmark tests whether the agent can CREATE these assets — not whether it can find and assign pre-made ones. Reusing existing files produces identical worlds across runs and invalidates the benchmark.
 ```
 
 Then attach or point the model at the **Prompts** listed below—those files are the **authoritative copy/paste prompts** for each subsystem.
