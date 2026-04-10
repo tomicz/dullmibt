@@ -24,8 +24,8 @@ rendering settings to make the scene look polished and realistic.
 1. DIRECTIONAL LIGHT (Sun)
    - Find or create a Directional Light named "Sun".
    - Rotation: (50, -30, 0) — sun angled from upper-left, creates long shadows across terrain.
-   - Color: warm sunlight (1.0, 0.96, 0.88) — NOT pure white.
-   - Intensity: 1.2 (bright but not blown out).
+   - Color: warm sunlight (1.0, 0.97, 0.92) — NOT pure white.
+   - Intensity: 3.0 (bright, ensures terrain is well-lit).
    - Shadow type: Soft Shadows.
    - Shadow resolution: 2048 (or highest available).
    - Shadow distance: 300 (covers most of the visible terrain).
@@ -35,10 +35,10 @@ rendering settings to make the scene look polished and realistic.
 
 2. AMBIENT LIGHTING
    - Ambient mode: Gradient (NOT flat color).
-   - Sky color: (0.55, 0.65, 0.82) — soft blue sky bounce.
-   - Equator color: (0.45, 0.50, 0.45) — muted greenish horizon bounce.
-   - Ground color: (0.20, 0.18, 0.15) — dark earth bounce from below.
-   - Ambient intensity: 1.0.
+   - Sky color: (0.85, 0.88, 0.95) — bright blue sky bounce.
+   - Equator color: (0.70, 0.72, 0.68) — warm horizon bounce.
+   - Ground color: (0.45, 0.42, 0.38) — warm earth bounce from below.
+   - Ambient intensity: 1.5.
 
 3. SKYBOX
    - Use the default URP procedural skybox or a gradient skybox.
@@ -64,13 +64,13 @@ rendering settings to make the scene look polished and realistic.
    - Scatter: 0.6.
 
    COLOR ADJUSTMENTS:
-   - Post Exposure: 0.1 (slight brightness boost).
-   - Contrast: 10 (subtle punch).
+   - Post Exposure: 0.6 (brightness boost to prevent dark scene).
+   - Contrast: 5 (subtle punch).
    - Saturation: 8 (slightly more vivid colors).
    - Color Filter: (1.0, 0.98, 0.95) — very subtle warm tint.
 
    VIGNETTE:
-   - Intensity: 0.25 (subtle darkening at screen edges).
+   - Intensity: 0.05 (very subtle darkening at screen edges).
    - Smoothness: 0.4.
 
    AMBIENT OCCLUSION (SSAO):
@@ -87,10 +87,8 @@ rendering settings to make the scene look polished and realistic.
    - If the URP asset is not programmatically accessible, configure via the light.
 
 6. FOG (optional — subtle depth cue)
-   - RenderSettings.fog = true (override previous layer's fog=false now that all layers are done).
-   - Fog mode: Linear.
-   - Fog start: 150.
-   - Fog end: 500.
+   - RenderSettings.fog = false by default. Only enable if scene looks good without it first.
+   - If enabled: Fog mode = Linear, start = 250, end = 600.
    - Fog color: (0.60, 0.68, 0.78) — blue-gray distance haze.
    - Fog should NOT obscure nearby terrain — only add depth at distance.
 
