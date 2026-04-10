@@ -2,10 +2,6 @@
 
 Use this prompt with a Unity-capable coding agent (Unity MCP) to generate a realistic landscape with distinct geographic features using a procedural mesh. This is **not** random noise bumps — the terrain must read as a real place with mountains, rolling hills, flat plains, and a carved river valley.
 
-## Relationship to existing terrain prompt
-
-This prompt **replaces** `generate-procedural-mesh-terrain.md` for benchmark runs that require realistic terrain. It uses the same `ProceduralMeshGround` object, same material paths, and same PBR pipeline — but with a dramatically more advanced noise algorithm and height-based coloring.
-
 ---
 
 ## World Scale Rules
@@ -152,8 +148,6 @@ Requirements:
     - `GroundHeightMap.png` (1024x1024, linear grayscale)
     - `GroundNormalMap.png` (2048x2048, normal map type)
       Finite-difference bake, assign _BumpMap, _BumpScale = 0.8.
-    - `GroundGrassMask.png` (1024x1024, linear)
-      White where slope < 0.35 AND height < 80% AND distToRiver > 13.
 
 12. UV + MATERIAL SETUP (critical — without this, textures show as solid color)
     - UVs MUST be assigned to mesh (step 3) before textures will display.
@@ -162,18 +156,13 @@ Requirements:
     - _BumpScale = 0.8, Smoothness = 0.06, Metallic = 0.0, _BaseColor = white.
     - RecalculateTangents() MUST be called for normal maps to function.
 
-13. PROCEDURAL GRASS
-    - Child "ProceduralGrass" under "ProceduralMeshGround".
-    - Use GroundGrassMask for placement. Reject steep/high/river areas.
-    - Grass density scales with map size (more area = more grass instances).
-
-14. ENVIRONMENT
+13. ENVIRONMENT
     - Fog MUST be disabled (RenderSettings.fog = false).
       Fog is a separate benchmark layer — it must not obscure terrain evaluation.
 
-15. SAVE AND REPORT
+14. SAVE AND REPORT
     - Return: map size, height range, zone coverage %, river count and lengths,
-      texture paths, grass count, material assignments.
+      texture paths, material assignments.
 ```
 
 ---
@@ -228,7 +217,7 @@ The final score = rubric score * map size multiplier. A perfect 500x500 scores 1
 | **World-space noise** | 5 | Noise uses wx/wz directly. Scale=(1,1,1). Larger maps = more features, not stretching. |
 | **Terrain tint** | 5 | Rock on slopes/peaks (not green). Snow on tops. Green plains. Brown river. All smooth. |
 | **Normal map** | 5 | Baked, assigned to _BumpMap. Tiling=(1,1). Tangents present. Adds visible detail. |
-| **Grass mask** | 5 | Slope/height/river exclusions. Grass on plains and gentle hills only. |
+| **Height map** | 5 | Baked grayscale heightmap. Linear. Correct range. |
 | **Material setup** | 2 | All tiling=(1,1). _BaseColor=white. Smoothness/Metallic correct. Fog off. |
 | **Performance** | 3 | Generation under 15 seconds. No editor freeze. |
 
@@ -237,8 +226,7 @@ The final score = rubric score * map size multiplier. A perfect 500x500 scores 1
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
 | **Landscape readability** | 8 | From any camera angle, terrain looks like a real place. Clear geographic features. |
-| **Color coherence** | 4 | Natural colors. Rock reads as rock, grass as grass. No green mountain slopes. |
-| **Grass placement** | 4 | Only on appropriate areas. Density varies. No grass on peaks or river bed. |
+| **Color coherence** | 8 | Natural colors. Rock reads as rock. No green mountain slopes. Snow on peaks. |
 | **Sun influence** | 4 | Directional tint baked in. Sun-facing slopes brighter. Adds depth. |
 
 ### Score Bands

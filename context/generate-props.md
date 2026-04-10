@@ -1,6 +1,6 @@
-# Prompt: Props Generation (Trees, Rocks, Bushes, Flowers)
+# Prompt: Props Generation (Trees, Rocks)
 
-Use this prompt with a Unity-capable coding agent (Unity MCP) to populate the terrain with procedural props — trees, rocks, bushes, and flowers. This is a **placement layer** — it reads terrain and water data but does NOT modify them.
+Use this prompt with a Unity-capable coding agent (Unity MCP) to populate the terrain with procedural props — trees and rocks. This is a **placement layer** — it reads terrain and water data but does NOT modify them.
 
 ## Critical Rule: Previous Layers are READ-ONLY
 
@@ -14,13 +14,11 @@ Use this prompt with a Unity-capable coding agent (Unity MCP) to populate the te
 - Prop generation algorithms:
   - Trees: [props/generate-tree.md](props/generate-tree.md)
   - Rocks: [props/generate-rock.md](props/generate-rock.md)
-  - Bushes: [props/generate-bush.md](props/generate-bush.md)
-  - Flowers: [props/generate-flower.md](props/generate-flower.md)
 
 ## Copy/Paste Prompt
 
 ```text
-Generate all props (trees, rocks, bushes, flowers) on the existing ProceduralMeshGround.
+Generate all props (trees, rocks) on the existing ProceduralMeshGround.
 Each prop is a unique procedural mesh. Do NOT modify the terrain, water, or any previous layer output.
 
 IMPORTANT RULES:
@@ -52,7 +50,6 @@ IMPORTANT RULES:
    Water exclusion:
    - River: no trees within riverHalfWidth + exclusionMargin
    - Lakes: no trees within lakeRadius + exclusionMargin
-   - Ponds: no trees within pondRadius + exclusionMargin
 
    Minimum spacing between trees: 4-8m (randomized per tree, trees are 5-8m tall)
 
@@ -88,52 +85,28 @@ IMPORTANT RULES:
    - Vary size: 0.3-2m radius.
    - Water exclusion margin: 50% of tree margin (rocks can be near shoreline).
 
-6. BUSHES (see props/generate-bush.md for mesh details)
-   - Place in grassy zones: slope < 0.3, height < 65% of max.
-   - Cluster near trees and in clearings.
-   - Target: 300-500 bushes for 500x500 map.
-   - Cell size: 6m with jitter.
-   - Half-buried in ground (lower 30% below surface).
-   - Water exclusion margin: 50% of tree margin.
-
-7. FLOWERS (see props/generate-flower.md for mesh details)
-   - Place in flat grassy zones: slope < 0.2, height 5-50% of max.
-   - Cluster in meadow patches using noise.
-   - Target: 400-800 flowers for 500x500 map.
-   - Cell size: 4m with jitter.
-   - Multi-color variety (red, yellow, blue, orange).
-   - Water exclusion margin: 30% of tree margin.
-
-8. HIERARCHY
+6. HIERARCHY
    Props (root)
    ├── Trees
    │   ├── Tree_0 → Trunk + Leaves
    │   └── Tree_N → Trunk + Leaves
-   ├── Rocks
-   │   ├── Rock_0
-   │   └── Rock_N
-   ├── Bushes
-   │   ├── Bush_0
-   │   └── Bush_N
-   └── Flowers
-       ├── Flower_0
-       └── Flower_N
+   └── Rocks
+       ├── Rock_0
+       └── Rock_N
 
-9. MATERIALS (shared across all props of same type)
+7. MATERIALS (shared across all props of same type)
    Create ONCE, assign to all:
    - Assets/Materials/TreeBark.mat (Baked Lit, brown)
    - Assets/Materials/TreeLeaves.mat (Baked Lit, green, double-sided)
    - Assets/Materials/RockGray.mat (Baked Lit, gray)
-   - Assets/Materials/BushGreen.mat (Baked Lit, dark green)
-   - Assets/Materials/FlowerRed.mat, FlowerYellow.mat, FlowerBlue.mat, FlowerOrange.mat
    See props/*.md for exact material setup.
 
-10. PERFORMANCE
-   - Total prop count: 1300-2300 for 500x500 map.
+8. PERFORMANCE
+   - Total prop count: 600-1000 for 500x500 map.
    - Each prop should be < 10K verts.
    - Generation should complete within 60 seconds.
 
-11. REPORT
+9. REPORT
    Return summary:
    - Per type: count placed, placement failures
    - Total vertex count
@@ -148,12 +121,10 @@ IMPORTANT RULES:
 
 - A forest of **visually unique** trees covering appropriate terrain areas — dense in valleys/plains, sparse at altitude, absent on peaks and steep slopes.
 - **Rocks** scattered on slopes, high terrain, and near river banks. Varied sizes and shapes.
-- **Bushes** in grassy zones, clustered near trees and in clearings. Half-buried for natural look.
-- **Flowers** in flat meadow patches with multi-color variety (red, yellow, blue, orange).
 - No props in water or within their respective exclusion margins.
 - Natural-looking distribution with clustering and clearings (not a uniform grid).
-- All props grounded via raycast — no floating, no buried (except bushes: 30% below surface).
-- Clean hierarchy: Props → Trees/Rocks/Bushes/Flowers → individual items.
+- All props grounded via raycast — no floating, no buried.
+- Clean hierarchy: Props → Trees/Rocks → individual items.
 
 ---
 
@@ -163,24 +134,21 @@ IMPORTANT RULES:
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Height-zone respect** | 8 | All prop types in valid zones only. No trees on peaks, rocks in appropriate zones, etc. |
-| **Water exclusion** | 8 | No props in water. Each type respects its own exclusion margin (trees 100%, bushes 50%, flowers 30%, rocks on shoreline OK). |
-| **Slope filtering** | 5 | No trees on cliffs. Rocks on slopes. Bushes/flowers on flat ground. |
+| **Height-zone respect** | 10 | All prop types in valid zones only. No trees on peaks, rocks in appropriate zones. |
+| **Water exclusion** | 10 | No props in water. Trees use full exclusion margin, rocks on shoreline OK. |
+| **Slope filtering** | 5 | No trees on cliffs. Rocks on slopes. |
 | **Natural distribution** | 8 | Clustering with clearings for all types. Not a uniform grid. |
 | **Spacing** | 4 | No overlapping props. Minimum distance enforced per type. |
-| **Grounding** | 4 | All props sit on terrain surface. Bushes 30% buried. No floating. |
-| **Prop-type zone logic** | 3 | Rocks favor slopes/high terrain. Flowers in meadows. Bushes near trees. |
+| **Grounding** | 3 | All props sit on terrain surface. No floating. |
 
 ### Prop Quality (30 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Tree uniqueness** | 5 | Each tree visibly different. Seed system works. |
-| **Tree structure** | 5 | Recursive branching, natural proportions, proper taper, cross-billboard foliage. |
-| **Rock variety** | 5 | Size variation (0.3-2m). Singles, lines, and mounds present. Distorted icospheres. |
-| **Bush quality** | 5 | Overlapping sphere clusters. Half-buried. Natural grouping. |
-| **Flower quality** | 5 | Multi-color variety. Visible stems and tops. Correct scale. |
-| **Materials** | 5 | Baked Lit for all. No glow. Correct colors per type. Shared materials. |
+| **Tree uniqueness** | 8 | Each tree visibly different. Seed system works. |
+| **Tree structure** | 8 | Recursive branching, natural proportions, proper taper, cross-billboard foliage. |
+| **Rock variety** | 7 | Size variation (0.3-2m). Singles, lines, and mounds present. Distorted icospheres. |
+| **Materials** | 7 | Baked Lit for all. No glow. Correct colors per type. Shared materials. |
 
 ### Technical Quality (20 points)
 
@@ -188,16 +156,16 @@ IMPORTANT RULES:
 |-----------|--------|------------|
 | **Layer isolation** | 8 | Terrain and water NOT modified. Placement only. |
 | **Scale rule** | 3 | All localScale = (1,1,1) for every prop. |
-| **Hierarchy** | 4 | Clean: Props → Trees/Rocks/Bushes/Flowers → individual items. |
-| **Performance** | 5 | Generates in < 60s. Total 1300-2300 props. Each < 10K verts. |
+| **Hierarchy** | 4 | Clean: Props → Trees/Rocks → individual items. |
+| **Performance** | 5 | Generates in < 60s. Total 600-1000 props. Each < 10K verts. |
 
 ### Visual Quality (10 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Scene reads as populated landscape** | 4 | Forest, rocky outcrops, undergrowth, and flower meadows all visible. |
+| **Scene reads as populated landscape** | 5 | Forest and rocky outcrops visible in appropriate areas. |
 | **Density feels natural** | 3 | Not too sparse, not too uniform. Each type has appropriate coverage. |
-| **Shadow quality** | 3 | Props cast shadows on terrain. Adds depth to scene. |
+| **Shadow quality** | 2 | Props cast shadows on terrain. Adds depth to scene. |
 
 ### Score Bands
 
@@ -205,9 +173,9 @@ IMPORTANT RULES:
 |-------|---------|
 | **0-25** | No props or props in wrong locations (water, peaks) |
 | **26-50** | Some props placed but uniform grid, no exclusion, or all identical |
-| **51-70** | Good placement, some variety, minor issues with one or two prop types |
-| **71-85** | Natural landscape with all four prop types, proper exclusions |
-| **86-100** | Excellent: natural distribution, all unique, perfect exclusions, all types present, clean hierarchy |
+| **51-70** | Good placement, some variety, minor issues |
+| **71-85** | Natural landscape with both prop types, proper exclusions |
+| **86-100** | Excellent: natural distribution, all unique, perfect exclusions, clean hierarchy |
 
 ---
 
@@ -223,8 +191,6 @@ IMPORTANT RULES:
 | Too many trees / slow | Reduce density. Target 400-600 for 500x500 map. |
 | Trees on cliffs | Compute slope from nearby height samples. Skip if slope > 0.5. |
 | Rocks in wrong zones | Rocks go on slopes > 0.25, high terrain, and near river banks. |
-| Bushes floating | Bushes should be 30% buried below terrain surface. |
-| Flowers everywhere | Flowers only in flat meadows: slope < 0.2, height 5-50% of max. |
 | Props overlapping | Each type has minimum spacing. Check distance to all nearby props. |
-| Wrong exclusion margins | Trees=full, Bushes=50%, Flowers=30%, Rocks=on shoreline OK. |
+| Wrong exclusion margins | Trees=full margin, Rocks=on shoreline OK. |
 | All props same material | Create shared materials ONCE, assign to all instances of same type. |

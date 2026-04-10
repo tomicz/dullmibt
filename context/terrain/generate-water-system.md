@@ -33,7 +33,7 @@ This adds visible water meshes that sit ON TOP of the terrain. Do NOT modify the
 
 IMPORTANT RULES:
 - DO NOT modify ProceduralMeshGround vertices, normals, UVs, or collider. Terrain is READ-ONLY.
-- DO NOT rebake any terrain textures (tint, normal, height, splat, grass mask). They are final.
+- DO NOT rebake any terrain textures (tint, normal, height, splat). They are final.
 - transform.localScale is ALWAYS (1, 1, 1) for all water objects.
 - Read terrain mesh data (vertices, normals, bounds) to determine where water goes.
 - Water surfaces sit slightly above the terrain surface — not buried, not floating high.
@@ -97,7 +97,7 @@ IMPORTANT RULES:
    - Create as "Pond_N" under "Water" parent.
 
 6. EXCLUSION ZONE DATA (for downstream layers)
-   Store exclusion data so trees/rocks/bushes avoid water areas:
+   Store exclusion data so trees/rocks avoid water areas:
 
    - Create "WaterExclusionZones" under "Water" parent.
    - For each water body, add a child GameObject encoding:
@@ -107,8 +107,6 @@ IMPORTANT RULES:
 
    Downstream placement rules:
    - Trees: full exclusion margin
-   - Bushes: 50% of margin (can approach closer)
-   - Flowers: 30% of margin
    - Rocks: can be ON shoreline banks
 
 7. ENVIRONMENT
@@ -216,7 +214,7 @@ The river extends off the map. Raycasts at those positions miss the terrain. Sol
 
 ### Layer isolation principle
 Each benchmark layer operates on top of previous layers without modifying them:
-- Layer 1 (Terrain): Creates mesh, textures, grass. FINAL.
+- Layer 1 (Terrain): Creates mesh, textures. FINAL.
 - Layer 2 (Splat): Adds texture detail. Does not modify mesh. FINAL.
 - Layer 3 (Water): Adds water surfaces. Does not modify mesh or textures. FINAL.
 - Layer 4+ (Objects): Places objects via raycast. Does not modify anything above.

@@ -40,7 +40,7 @@ You are a Unity Editor agent with MCP/tools that can execute editor C# and mutat
 Benchmark rules:
 1) Follow the layer plan in darko-unity-llm-intelligence-benchmark-test.md strictly in order.
 2) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors.
-3) When terrain geometry changes (water system carving), rebake ALL terrain textures (height, normal, tint, splat, grass mask, composites), reassign materials, regenerate grass.
+3) When terrain geometry changes (water system carving), rebake ALL terrain textures (height, normal, tint, splat, composites), reassign materials.
 4) Placement: use world-placement-delegator rules—downward raycast to ProceduralMeshGround, no penetration, overlap budgets.
 5) Scale is ALWAYS (1,1,1). Map size controlled by localSizeX/Z. Noise uses world-space coordinates.
 6) Output: per-layer summary (counts, key asset paths, material slots assigned).
@@ -54,13 +54,11 @@ Then attach or point the model at the **Prompts** listed below—those files are
 
 Execute **one layer at a time**. Do not skip the **visual refresh handshake** after any step that edits terrain vertices.
 
-### Layer 1 — Terrain + surface PBR + grass on mesh
+### Layer 1 — Terrain + surface PBR
 
-- **Standard prompt (gentle terrain):** [context/terrain/generate-procedural-mesh-terrain.md](context/terrain/generate-procedural-mesh-terrain.md)  
-- **Realistic terrain prompt (benchmark tier):** [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)  
-- **Reference:** [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)  
-- **Deliverables:** `ProceduralMeshGround` (mesh built with scale 1,1,1), `MeshCollider`, baked height/normal/mask textures, height-based terrain tint (snow/rock/grass/river zones), `ProceduralGrass` child system, `RiverPath` metadata object, assigned `Ground.mat` + `ProceduralGrass.mat`.
-- **Scoring:** Realistic terrain prompt includes a 100-point rubric covering structural quality (50), technical quality (30), and visual quality (20). Map size multiplier applies (0.5x–1.3x).
+- **Primary prompt:** [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)  
+- **Deliverables:** `ProceduralMeshGround` (mesh built with scale 1,1,1), `MeshCollider`, baked height/normal textures, height-based terrain tint (snow/rock/river zones), `RiverPath` metadata object, assigned `Ground.mat`.
+- **Scoring:** 100-point rubric covering structural quality (50), technical quality (30), and visual quality (20). Map size multiplier applies (0.5x–1.3x).
 
 ### Layer 2 — Terrain Splat Mapping (dynamic multi-texture blending)
 
@@ -74,20 +72,18 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Primary prompt:** [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)  
 - **Requires:** Layer 1 + Layer 2 completed. RiverPath must exist.
 - **Why before objects:** Water carves terrain geometry. All objects must be placed on FINAL terrain — after all carving is done. Placing objects first, then carving, would leave floating trees and buried rocks.
-- **Deliverables:** `RiverWater` mesh following RiverPath, `Lake_N` irregular water bodies in low points, `Pond_N` small water bodies in plains, `WaterExclusionZones` for downstream layers, full terrain texture rebake (tint, normal, height, splat, grass mask, composites), regenerated grass.
-- **Mandatory:** basin carving with cosine falloff, water surface placement, exclusion zone data, **single-pass rebake** of ALL terrain textures + grass.
+- **Deliverables:** `RiverWater` mesh following RiverPath, `Lake_N` irregular water bodies in low points, `Pond_N` small water bodies in plains, `WaterExclusionZones` for downstream layers.
+- **Mandatory:** water surface placement, exclusion zone data.
 - **Scoring:** 100-point rubric covering river (25), lakes (25), ponds (15), terrain refresh (25), technical (10).
 
-### Layer 4 — Props: trees, rocks, bushes, flowers
+### Layer 4 — Props: trees, rocks
 
 - **Placement prompt:** [context/generate-props.md](context/generate-props.md)  
 - **Prop definitions:**
   - [context/props/generate-tree.md](context/props/generate-tree.md) — Procedural recursive tree (seeded, unique per instance)
   - [context/props/generate-rock.md](context/props/generate-rock.md) — Rocks: singles, lines, mounds
-  - [context/props/generate-bush.md](context/props/generate-bush.md) — Bushes: singles + groups, half-buried
-  - [context/props/generate-flower.md](context/props/generate-flower.md) — Flowers: multi-color, larger tops
 - **Requires:** Layer 1 + Layer 3 completed. WaterExclusionZones must exist.
-- **Deliverables:** `Trees`, `Rocks`, `Bushes`, `Flowers` parent containers. All props raycast-grounded, respecting height/slope/water exclusion zones. Baked Lit materials. Natural distribution with clustering.
+- **Deliverables:** `Trees`, `Rocks` parent containers. All props raycast-grounded, respecting height/slope/water exclusion zones. Baked Lit materials. Natural distribution with clustering.
 - **Key rules:** Each prop uses seeded random for uniqueness. Placement respects terrain zones — no props on peaks, cliffs, or in water. Natural distribution with noise-based clustering and clearings.
 - **Scoring:** 100-point rubric covering placement quality (40), prop quality (30), technical quality (20), visual quality (10).
 
@@ -103,10 +99,7 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 
 ### Layer 7 — Lighting, shadows, post-processing
 
-Pick **one** pass as specified by the benchmark runner:
-
-- **V2 / dense worlds:** [context/graphics.md](context/graphics.md)  
-- **Earlier polish preset:** [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)  
+- **Primary prompt:** [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)  
 
 ### Layer 8 — Performance tier (optional)
 
@@ -122,20 +115,15 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 
 | File                                                                                       | Role                                          |
 | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| [context/terrain/generate-procedural-mesh-terrain.md](context/terrain/generate-procedural-mesh-terrain.md) | Procedural mesh terrain, maps, grass (gentle) |
-| [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)             | Realistic terrain: mountains, hills, river (benchmark tier) |
+| [context/terrain/generate-realistic-terrain.md](context/terrain/generate-realistic-terrain.md)             | Realistic terrain: mountains, hills, river    |
 | [context/terrain/generate-terrain-splat-map.md](context/terrain/generate-terrain-splat-map.md)             | Terrain splat mapping: multi-texture blending |
-| [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)                       | Water system: rivers, lakes, ponds + terrain refresh |
-| [context/terrain/new-terrain-pbr.md](context/terrain/new-terrain-pbr.md)                                   | Project terrain/grass standard                |
-| [context/generate-props.md](context/generate-props.md)                                     | Props placement: trees, rocks, bushes, flowers |
+| [context/terrain/generate-water-system.md](context/terrain/generate-water-system.md)                       | Water system: rivers, lakes, ponds            |
+| [context/generate-props.md](context/generate-props.md)                                     | Props placement: trees, rocks                 |
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
-| [context/props/generate-bush.md](context/props/generate-bush.md)                           | Bushes: singles + groups, half-buried         |
-| [context/props/generate-flower.md](context/props/generate-flower.md)                       | Flowers: multi-color, larger tops             |
 | [context/biome-temperate-forest.md](context/biome-temperate-forest.md)                     | Temperate forest biome definition             |
 | [context/generate-volumetric-cloud.md](context/generate-volumetric-cloud.md)               | Cloud systems from primitives                 |
-| [context/graphics.md](context/graphics.md)                                                 | Graphics V2 pass                              |
-| [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)   | Stylized polish pass                          |
+| [context/visual-polish-lighting-graphics.md](context/visual-polish-lighting-graphics.md)   | Lighting and visual polish pass               |
 
 
 ---
