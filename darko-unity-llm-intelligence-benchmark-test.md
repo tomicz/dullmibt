@@ -112,7 +112,7 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/generate-props.md](context/generate-props.md)                                     | Props placement: trees, rocks                 |
 | [context/props/generate-tree.md](context/props/generate-tree.md)                           | Procedural realistic tree (seeded, recursive branching) |
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
-| [context/biome-temperate-forest.md](context/biome-temperate-forest.md)                     | Temperate forest biome definition             |
+
 
 
 ---
