@@ -73,7 +73,7 @@ To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Pre
 
 ## Scoring
 
-Each layer prompt includes a detailed 100-point scoring rubric. See `darko-unity-llm-intelligence-benchmark-test.md` for the overall scoring guide.
+Each layer in `START-BENCHMARK.md` includes a 100-point scoring rubric. Total score is out of 700 across all 7 layers. Layer 1 has a map size multiplier (0.5x–1.3x) that applies to its score.
 
 ## Community
 
