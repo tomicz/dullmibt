@@ -113,6 +113,11 @@ Requirements:
      Rule of thumb: 1 river per 500x500 area of map.
    - Generate 10-12 intermediate waypoints with sinusoidal meander:
      meander amplitude = 45 world units, frequency along path = sin(t * 4.5)
+   - MOUNTAIN AVOIDANCE: After generating waypoints, sample the terrain height at each
+     waypoint. If a waypoint lands in a mountain zone (zoneVal > 0.75 or height > 60% of
+     max), push it laterally away from the mountain center until it sits in a valley, foothill,
+     or plains zone. Rivers flow AROUND mountains, not through them. A river cutting through
+     a tall mountain peak looks artificial.
    - Smooth path using Catmull-Rom interpolation → dense polyline (200+ segments).
    - Carve channel:
      riverHalfWidth = 18, bankWidth = 22, carveDepth = 4
@@ -205,7 +210,7 @@ The final score = rubric score * map size multiplier. A perfect 500x500 scores 1
 | **Mountain quality** | 8 | Rocky coloring on slopes/peaks. Multiple peaks. Domain warping for organic shapes. |
 | **Hill quality** | 7 | Rolling terrain 10-30m relief. Smooth transitions. Green coloring. |
 | **Plains quality** | 5 | Flat areas, max 4m variation. Bright green. Readable as open ground. |
-| **River valley** | 10 | Meanders off map edges. Smooth banks. Flows downhill. Brown/rock coloring in bed/banks. |
+| **River valley** | 10 | Meanders off map edges. Flows AROUND mountains, not through them. Smooth banks. Flows downhill. Brown/rock coloring in bed/banks. |
 | **Zone transitions** | 5 | No hard edges. Foothills as gradual transition. smoothstep blending. |
 | **Domain warping** | 5 | Organic shapes. No grid artifacts or circular blobs. |
 
@@ -249,6 +254,7 @@ The final score = rubric score * map size multiplier. A perfect 500x500 scores 1
 | Texture shows as solid color | Check mesh.uv is assigned. Check material tiling = (1,1). |
 | Normal map has no effect | Call mesh.RecalculateTangents(). Check _BumpScale > 0. |
 | River doesn't reach map edges | Start/end points must be BEYOND terrain bounds (e.g., +-localSizeX*0.55). |
+| River cuts through mountains | Push waypoints laterally away from mountain zones. Sample zoneVal at each waypoint. |
 | Larger map looks stretched | Noise must use wx/wz directly with scale=(1,1,1). NOT normalized coords. |
 | Want more features on big map | They come automatically from world-space noise. More area = more noise cycles. |
 | Terrain too smooth | Add high-frequency noise octave. |
