@@ -97,205 +97,245 @@ The 7 layers follow. Execute them in order.
 
 ---
 
-# Layer 1 — Terrain + Surface PBR
+# Layer 1 — Terrain Mesh + Hydrology + Data Side-Channels
+
+Layer 1 is **only** the bare terrain mesh, the river network carved into it, and the data side-channels that downstream layers will read. **No PBR. No splat. No grass. No tinting.** The Ground material this layer assigns is a flat gray placeholder; Layer 2 replaces its maps.
 
 ## World Scale Rules
 
-**1 unit = 1 Unity unit = 1 primitive cube width/length.** The transform scale is ALWAYS `(1, 1, 1)`. Map size is controlled entirely by `localSizeX` and `localSizeZ`.
+**1 unit = 1 Unity unit.** The transform scale is ALWAYS `(1, 1, 1)`. Map size is controlled entirely by `localSizeX` and `localSizeZ`.
 
 | Map size | localSizeX | localSizeZ | World footprint | Suggested vertsX/Z |
 |----------|-----------|-----------|----------------|-------------------|
-| 10x10 | 10 | 10 | 10x10 units | 51x51 |
-| 100x100 | 100 | 100 | 100x100 units | 201x201 |
-| 500x500 | 500 | 500 | 500x500 units | 401x401 |
-| 1000x1000 | 1000 | 1000 | 1000x1000 units | 501x501 |
+| 100x100 | 100 | 100 | 100x100 units | 101x101 |
+| 250x250 | 250 | 250 | 250x250 units | 251x251 |
+| 500x500 | 500 | 500 | 500x500 units | 501x501 |
+| 1000x1000 | 1000 | 1000 | 1000x1000 units | 501x501 (2u/vert) |
 
-**Critical rule: Larger maps must generate MORE content, NOT stretch.** Because noise is sampled using world-space coordinates (wx, wz = vertex position directly, no scale multiplication), a 1000x1000 map naturally covers more noise space and produces more mountains, more hills, more rivers. The terrain must never look stretched — a mountain on a 100x100 map should be the same physical size as a mountain on a 1000x1000 map; the larger map simply has room for more of them.
+**Critical rule: Larger maps must generate MORE content, NOT stretch.** Noise frequencies are expressed in cycles-per-meter and are sampled at world-space `(wx, wz)`. A mountain on a 100x100 map is the same physical size as a mountain on a 1000x1000 map — the larger map simply contains more of them.
 
-**Vertex density:** Target ~1 vertex per world unit. A 500x500 map needs ~501x501 vertices. A 1000x1000 map needs ~1001x1001 (but 501x501 is acceptable for performance, giving ~2 units per vertex).
+**Vertex density:** target roughly 1 vertex per world unit, capped at 501×501 for performance.
+
+## Random Seed Rule
+
+**Layer 1 must use a fresh random seed on every run.** This is intentional: the benchmark exists to evaluate models against terrains they have never seen. A fixed seed lets a model overfit one map.
+
+- Seed source: `unchecked((int)System.DateTime.Now.Ticks)`.
+- The actual integer used MUST be written into `terrain.json` so any run can be replayed for debugging.
+- Every randomized step in the pipeline (FBM offsets, droplet starts, river noise, etc.) must seed from this single value (typically via `System.Random(seed)`), not from `UnityEngine.Random` global state.
 
 ---
 
 ## Layer 1 Prompt
 
 ```text
-In the active Unity scene, generate a realistic procedural terrain with mountains, hills, plains, and a river valley using a custom Mesh (NOT Unity Terrain).
+In the active Unity scene, generate a realistic procedural terrain with mountains, valleys, plains, and a river network using a custom Mesh (NOT Unity Terrain).
+
+Layer 1 is terrain mesh + rivers + data side-channels ONLY.
+Do NOT bake PBR/splat textures, do NOT create grass, do NOT tint by height.
+Layer 2 will replace the placeholder material's maps. Layer 3 will add water surfaces.
 
 Inputs (honor these if specified, otherwise use defaults):
-- localSizeX = 500, localSizeZ = 500         // world units (1 unit = 1 Unity unit)
-- vertsX = 501, vertsZ = 501                  // ~1 vertex per world unit
-- seed = 42                                    // deterministic generation
+- localSizeX = 500, localSizeZ = 500     // world units
+- vertsX    = 501, vertsZ    = 501       // ~1 vertex per world unit
+- seed      = unchecked((int)System.DateTime.Now.Ticks)   // RANDOM per run, recorded to JSON
 
 IMPORTANT SCALE RULE:
-- transform.localScale is ALWAYS (1, 1, 1). Never use scale to change map size.
-- The map size IS localSizeX x localSizeZ in world units.
-- Noise must be sampled using direct world positions (wx = vertex.x, wz = vertex.z).
-  No scale multiplication. This ensures larger maps produce MORE features, not stretched ones.
-- A 1000x1000 map has ~4x the mountains, hills, rivers of a 500x500 map, NOT the same
-  features stretched 2x bigger.
+- transform.localScale is ALWAYS (1, 1, 1).
+- Noise is sampled using direct world coordinates (wx = vertex.x, wz = vertex.z).
+- Larger maps produce MORE features, never stretched ones.
 
 Requirements:
 
 1. CLEANUP
-   - Delete existing "ProceduralTerrain", "ProceduralMeshGround", "RiverPath" objects if present.
+   - Delete existing "ProceduralTerrain", "ProceduralMeshGround", "RiverPath" GameObjects if present.
+   - Delete any pre-existing files at the output paths listed below before regenerating.
 
 2. CREATE MESH OBJECT
-   - Create GameObject "ProceduralMeshGround" at (0,0,0).
-   - transform.localScale = (1, 1, 1). ALWAYS. Never change this.
+   - GameObject "ProceduralMeshGround" at (0,0,0), localScale (1,1,1).
    - Add MeshFilter, MeshRenderer, MeshCollider.
-   - Use UInt32 index format (vertex count likely exceeds 65535).
+   - Mesh.indexFormat = UInt32 (vertex count exceeds 65535 at 501x501).
 
-3. BUILD VERTEX GRID WITH UVs
-   - Centered grid: startX = -localSizeX * 0.5, startZ = -localSizeZ * 0.5
-   - For each vertex (ix, iz):
-     lx = startX + (ix / (vertsX-1)) * localSizeX
-     lz = startZ + (iz / (vertsZ-1)) * localSizeZ
-     wx = lx    // world-space X (no scale multiplication — scale is 1)
-     wz = lz    // world-space Z
-   - MANDATORY: Assign UV coordinates to every vertex:
-     uv[idx] = Vector2(ix / (vertsX-1), iz / (vertsZ-1))
-     Without UVs, textures will not map correctly across the terrain.
+3. VERTEX GRID + UVs
+   - Centered grid: startX = -localSizeX * 0.5, startZ = -localSizeZ * 0.5.
+   - For each (ix, iz): lx = startX + ix * (localSizeX / (vertsX-1)),
+                        lz = startZ + iz * (localSizeZ / (vertsZ-1)).
+   - wx = lx, wz = lz (no scale multiplication).
+   - Assign UVs: uv[idx] = (ix / (vertsX-1), iz / (vertsZ-1)). Required for downstream layers.
 
-4. DOMAIN WARPING (organic shapes, no axis-aligned blobs)
-   - Before any noise lookup, warp the sample coordinates:
-     float warpX = (PerlinNoise(wx * 0.006 + 100, wz * 0.006 + 200) - 0.5) * 80;
-     float warpZ = (PerlinNoise(wx * 0.006 + 300, wz * 0.006 + 400) - 0.5) * 80;
-     float swx = wx + warpX;
-     float swz = wz + warpZ;
+4. BASE HEIGHT FIELD — FBM with domain warping and a gentle continental tilt
+   - Domain warp (organic shapes, no axis-aligned banding):
+       wxw = wx + (PerlinNoise(wx * 0.005 + 11.1, wz * 0.005 + 23.7) - 0.5) * 80;
+       wzw = wz + (PerlinNoise(wx * 0.005 + 41.3, wz * 0.005 + 57.9) - 0.5) * 80;
+   - 5-octave FBM with frequencies in cycles-per-meter and amplitudes in meters:
+       k = [0.003, 0.008, 0.020, 0.050, 0.120]
+       a = [110,   38,    14,    5,     2   ]
+     (Use seeded per-octave offsets so different runs produce different worlds.)
+   - Continental tilt: bias the south edge lower so water has somewhere to drain to.
+       tilt = 35 * ((wz - minZ) / (maxZ - minZ) - 0.5)   // negative on the south half
+       h   = fbm(wxw, wzw) - tilt
+   - Lowland flatten (keeps depressions readable as basins, not abyss):
+       if (h < 0) h *= 0.22;
+   - Store the result as a width*height float[] DEM. This DEM is the working surface
+     for all subsequent hydrology steps.
 
-5. ZONE SELECTION (continental noise — determines terrain type)
-   - Single low-frequency Perlin layer:
-     float zoneVal = PerlinNoise(swx * 0.003 + 500, swz * 0.003 + 700);
-   - Zone mapping (0..1 range):
-     < 0.25  = Plains
-     0.25-0.55 = Hills
-     0.55-0.80 = Foothills (transition)
-     > 0.80  = Mountains
-   - Compute blend weights using smoothstep for soft transitions:
-     float plainW  = 1 - smoothstep(0.20, 0.30, zoneVal);
-     float hillW   = smoothstep(0.20, 0.30, zoneVal) * (1 - smoothstep(0.50, 0.60, zoneVal));
-     float footW   = smoothstep(0.50, 0.60, zoneVal) * (1 - smoothstep(0.75, 0.85, zoneVal));
-     float mountW  = smoothstep(0.75, 0.85, zoneVal);
-   - Normalize: totalW = plainW + hillW + footW + mountW; divide each by totalW.
+5. HYDRAULIC EROSION (Sebastian Lague droplet simulation)
+   - ~100,000 droplets (scale linearly with cell count for non-default sizes).
+   - Per-droplet: random start cell, inertia 0.05, sediment capacity factor 4,
+     erode speed 0.4, deposit speed 0.3, evaporate 0.01, gravity 4, max lifetime 30,
+     erosion brush radius 3 (precomputed weighted disk).
+   - Erosion mutates the DEM in place; this carves natural valleys and ridges.
 
-6. PER-ZONE NOISE STACKS (each zone has its own character)
+6. PRIORITY-FLOOD DEPRESSION FILL (Barnes 2014)
+   - Build a min-heap of all edge cells keyed by elevation.
+   - Pop lowest, raise each unvisited neighbour to max(neighbour, popped + epsilon)
+     where epsilon = 5e-4. Push neighbour onto heap.
+   - Result: a hydrologically corrected DEM with NO interior pits — every cell drains
+     downhill to the boundary. This is the precondition for connected rivers.
 
-   PLAINS (gentle, nearly flat):
-   - Base elevation: 1.0
-   - 2 octaves: k = [0.02, 0.06], a = [1.5, 0.4]
-   - Max local relief: ~4m
+7. D8 FLOW DIRECTION + ACCUMULATION
+   - For each interior cell, choose the steepest of 8 neighbours weighted by
+     1/sqrt(2) for diagonals; record the flow direction index.
+   - Compute flow accumulation via Kahn's topological sort:
+       inDegree[c] = number of upstream neighbours pointing to c
+       seed queue with cells whose inDegree == 0
+       acc[c] = 1 + sum of acc[upstream]; push downstream neighbour when its
+       inDegree drops to 0.
+   - Output: int[] accumulation, where each cell value = number of upstream cells.
 
-   HILLS (rolling, moderate):
-   - Base elevation: 12.0
-   - 3 octaves: k = [0.008, 0.025, 0.07], a = [12, 5, 1.5]
-   - Max local relief: ~35m
+8. RIVER NETWORK EXTRACTION
+   - Threshold: keep cells with accumulation >= 98.5th percentile of all cells
+     (i.e. top 1.5%). Mark these as "river-eligible".
+   - Find mouths: river-eligible cells on the map boundary, sorted by accumulation.
+     Take up to the top 3 mouths whose accumulation >= 5x the threshold — these
+     are the dominant outflows.
+   - Upstream BFS from each mouth following the reversed D8 graph: walk into any
+     upstream river-eligible cell. Tag every visited cell with its mouth's river ID.
+     The result is up to 3 connected, edge-to-edge river systems.
+   - Reject orphan cells (river-eligible but not reached from any mouth).
 
-   FOOTHILLS (transition):
-   - footH = lerp(hillH, mountH, smoothstep(0.55, 0.75, zoneVal))
+9. VARIABLE-WIDTH RIVER CARVING
+   - For each river cell c:
+       accNorm = sqrt(acc[c] / maxAcc)                            // 0..1
+       widthCells = (0.55 + accNorm * 1.05) * 3.5 * jitter        // jitter 0.75..1.25 from Perlin
+       depthMeters = 4.0 * (0.55 + accNorm * 0.95)
+   - Carve a soft-falloff disk centred on c into the DEM:
+       for each cell within widthCells radius:
+         t = distance / widthCells                                // 0..1
+         falloff = 1 - smoothstep(0, 1, t)                        // 1 at center → 0 at edge
+         dem[n] -= depthMeters * falloff                          // additive over overlaps
+   - 3x3 box blur ONE pass over river-band cells only, to soften the carve.
+   - Record per-cell carve depth and width radius for the FlowMap channels.
 
-   MOUNTAINS (dramatic peaks):
-   - Base elevation: 45.0
-   - 4 octaves: k = [0.005, 0.015, 0.04, 0.12], a = [50, 20, 8, 2]
-   - Peak sharpening: mountH = 45.0 + raw * pow(saturate(raw/40 + 0.5), 0.4)
+10. WRITE DEM BACK TO MESH
+    - Vertex y = dem[ix, iz].
+    - mesh.vertices = ..., mesh.triangles = ..., mesh.uv = ...
+    - RecalculateNormals(), RecalculateTangents(), RecalculateBounds().
+    - Save the mesh as an asset:
+        Assets/BenchmarkRuns/{run-id}/Meshes/GroundMesh.asset
+    - Assign to MeshFilter.sharedMesh and MeshCollider.sharedMesh.
 
-7. COMPOSITE HEIGHT
-   - h = (plainW * plainH + hillW * hillH + footW * footH + mountW * mountH) / totalW;
+11. PLACEHOLDER GROUND MATERIAL (Layer 2 will overwrite its maps)
+    - Path: Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat
+    - Shader: Universal Render Pipeline/Lit (fallback Standard).
+    - _BaseColor = (0.55, 0.55, 0.55, 1), Smoothness = 0.10, Metallic = 0.0.
+    - No textures assigned. This is intentional — Layer 2 supplies them.
 
-8. RIVER VALLEY (spline-based carving)
-   - River must flow OFF the map edges — start and end points BEYOND terrain bounds.
-     Example for 500x500: start near (-270, ?, -280), end near (260, ?, 270).
-   - For larger maps (1000x1000), generate MULTIPLE rivers.
-     Rule of thumb: 1 river per 500x500 area of map.
-   - Generate 10-12 intermediate waypoints with sinusoidal meander:
-     meander amplitude = 45 world units, frequency along path = sin(t * 4.5)
-   - MOUNTAIN AVOIDANCE: After generating waypoints, sample the terrain height at each
-     waypoint. If a waypoint lands in a mountain zone (zoneVal > 0.75 or height > 60% of
-     max), push it laterally away from the mountain center until it sits in a valley, foothill,
-     or plains zone. Rivers flow AROUND mountains, not through them.
-   - Smooth path using Catmull-Rom interpolation → dense polyline (200+ segments).
-   - Carve channel:
-     riverHalfWidth = 18, bankWidth = 22, carveDepth = 4
-     U-shaped profile (quadratic: profile = (d/halfWidth)^2) for flat river bottom with gradual walls.
-     Bank transition uses cosine falloff (NOT cliff edges).
-     River bed elevation descends along spline (flows downhill).
-   - Store path on "RiverPath" GameObject for later water layer.
+12. DATA SIDE-CHANNEL: HEIGHTMAP EXR
+    - Path: Assets/BenchmarkRuns/{run-id}/Data/Heightmap.exr
+    - Format: TextureFormat.RGBAFloat, encoded with EncodeToEXR(EXRFlags.OutputAsFloat).
+    - Channel layout:
+        R = world-space height in meters (raw float, NOT normalized)
+        G = 0, B = 0, A = 1
+    - Importer settings: sRGB OFF, filterMode Point, wrapMode Clamp,
+      textureCompression None, isReadable true.
 
-9. FINAL MESH
-   - Set vertices, triangles, UVs on mesh.
-   - RecalculateNormals(), RecalculateTangents(), RecalculateBounds().
-   - Tangents are REQUIRED for normal map lighting to work correctly.
-   - Assign mesh to MeshFilter and MeshCollider.
+13. DATA SIDE-CHANNEL: FLOWMAP EXR
+    - Path: Assets/BenchmarkRuns/{run-id}/Data/FlowMap.exr
+    - Format: TextureFormat.RGBAFloat, EncodeToEXR(OutputAsFloat).
+    - Channel layout (one cell per pixel, exact same dimensions as the vertex grid):
+        R = normalized flow accumulation (acc / maxAcc), 0..1
+        G = river mask (1.0 inside any carved river band, 0 outside)
+        B = carve depth in meters at this cell (0 outside river bands)
+        A = centerline width radius in cells (0 outside river bands)
+    - Importer settings: sRGB OFF, filterMode Point, wrapMode Clamp,
+      textureCompression None, isReadable true.
 
-10. TERRAIN TINT (height + slope based coloring)
-    - Generate `Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png` (1024x1024, sRGB).
-    - Compute per-pixel: height (h), slope (1 - dot(normal, up)), distance to river.
-    - Normalized height: hN = (h - minH) / (maxH - minH).
+14. DATA SIDE-CHANNEL: TERRAIN.JSON
+    - Path: Assets/BenchmarkRuns/{run-id}/Data/terrain.json
+    - Required fields:
+        seed                    int    (the actual seed used — for replay)
+        localSizeX, localSizeZ  int
+        vertsX, vertsZ          int
+        minHeight, maxHeight    float  meters
+        riverSystemCount        int    1..3
+        riverCellCount          int    total cells flagged as river
+        widthRadiusMin/Max      float  cells
+        carveDepthMin/Max       float  meters
+        heightmapPath           string asset path to Heightmap.exr
+        flowmapPath             string asset path to FlowMap.exr
+        meshPath                string asset path to GroundMesh.asset
+        channels                object describing R/G/B/A meaning of each EXR
+    - Pretty-printed JSON, UTF-8, no BOM.
 
-    Color rules:
-    - Rock: slope > 0.12 OR hN > 0.35. Color: (0.45, 0.40, 0.33) to (0.30, 0.26, 0.22).
-    - Snow: hN > 0.75 AND slope < 0.25. Blend to (0.92, 0.93, 0.96).
-    - River bed: distToRiver < 18 → (0.25, 0.18, 0.12)
-    - River bank: distToRiver 18-40 → blend with quadratic ease.
-    - Grass/Plains: remaining → (0.22, 0.50, 0.12) to (0.28, 0.55, 0.16).
+15. RIVERPATH GAMEOBJECT (compatibility surface for Layer 3)
+    - Create empty GameObject "RiverPath" at (0,0,0), scale (1,1,1).
+    - Pick the river system with the largest total cell count as the "primary" river.
+    - Walk its centerline from highest mouth to lowest using upstream-then-downstream
+      ordering on the D8 graph; sample ~30-40 evenly spaced waypoints along it.
+    - For each waypoint, create a child GameObject "Waypoint_{i}" at the waypoint's
+      world position (x, terrainHeightAtCell, z). Scale (1,1,1).
+    - This is the compatibility surface Layer 3 reads to build the river water mesh.
+    - Additional river systems (if any) live only in the FlowMap.exr — Layer 3 may
+      read FlowMap.G to discover them.
 
-    Apply sun exposure: color *= lerp(0.82, 1.18, dot(normal, lightDir)^2).
-    Assign to Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat _BaseMap.
+16. ENVIRONMENT
+    - RenderSettings.fog = false.
 
-11. BAKE PBR MAPS
-    - `Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightMap.png` (1024x1024, linear grayscale)
-    - `Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png` (2048x2048, normal map type)
-      Finite-difference bake, assign _BumpMap, _BumpScale = 0.8.
-
-12. UV + MATERIAL SETUP
-    - UVs MUST be assigned to mesh before textures will display.
-    - All material texture tiling MUST be (1, 1). No tiling/repeat.
-    - Ground.mat: _BaseMap = GroundHeightTint, _BumpMap = GroundNormalMap.
-    - _BumpScale = 0.8, Smoothness = 0.06, Metallic = 0.0, _BaseColor = white.
-    - RecalculateTangents() MUST be called for normal maps to function.
-
-13. ENVIRONMENT
-    - Fog MUST be disabled (RenderSettings.fog = false).
-
-14. SAVE AND REPORT
-    - Return: map size, height range, zone coverage %, river count and lengths,
-      texture paths, material assignments.
+17. REPORT
+    Return a per-layer summary:
+      seed used, map size, vertex count, height range,
+      droplets simulated, depressions filled count,
+      maxAccumulation, riverSystemCount, riverCellCount,
+      width radius range (cells), carve depth range (meters),
+      mesh path, material path, Heightmap.exr path, FlowMap.exr path, terrain.json path,
+      RiverPath waypoint count.
 ```
 
 ---
 
 ## Layer 1 Scoring Rubric (100 base points)
 
-### Structural Quality (50 points)
+### Hydrology Quality (45 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Zone differentiation** | 10 | Mountains, hills, and plains are visually distinct. |
-| **Mountain quality** | 8 | Rocky coloring on slopes/peaks. Multiple peaks. Domain warping. |
-| **Hill quality** | 7 | Rolling terrain 10-30m relief. Smooth transitions. |
-| **Plains quality** | 5 | Flat areas, max 4m variation. Bright green. |
-| **River valley** | 10 | Meanders off map edges. Flows around mountains. Smooth banks. |
-| **Zone transitions** | 5 | No hard edges. smoothstep blending. |
-| **Domain warping** | 5 | Organic shapes. No grid artifacts. |
+| **Pit-free DEM** | 8 | Priority-Flood (or equivalent) applied; no interior sinks remain. |
+| **Edge-to-edge rivers** | 12 | At least one continuous river crosses the map from interior to a boundary mouth. |
+| **River count scales with map** | 5 | 1–3 dominant river systems on a 500x500; more on larger maps. |
+| **Variable river width** | 8 | Width grows with sqrt(accumulation); narrowest tributaries clearly thinner than trunk. |
+| **Natural valley cross-section** | 6 | Soft-falloff carve, no cliff walls, banks blend into surrounding terrain. |
+| **Erosion realism** | 6 | Hydraulic erosion droplets clearly shaped ridges/valleys before river extraction. |
 
-### Technical Quality (30 points)
+### Technical Quality (35 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Mesh + UVs** | 5 | Correct vertex count. UVs assigned. UInt32 format. Tangents calculated. |
-| **World-space noise** | 5 | Noise uses wx/wz directly. Scale=(1,1,1). |
-| **Terrain tint** | 5 | Rock on slopes/peaks. Snow on tops. Green plains. Brown river. |
-| **Normal map** | 5 | Baked, assigned to _BumpMap. Tiling=(1,1). |
-| **Height map** | 5 | Baked grayscale heightmap. Linear. |
-| **Material setup** | 2 | All tiling=(1,1). _BaseColor=white. Fog off. |
-| **Performance** | 3 | Generation under 15 seconds. |
+| **Random seed per run** | 6 | Seed sourced from DateTime.Now.Ticks; recorded in terrain.json. |
+| **Reproducibility metadata** | 4 | terrain.json contains seed + all parameters needed to replay. |
+| **Heightmap.exr** | 5 | RGBAFloat, R = raw meters, sRGB off, point filter, clamp, uncompressed, readable. |
+| **FlowMap.exr** | 6 | RGBAFloat with documented R/G/B/A = accNorm/mask/depth/width channels. |
+| **Mesh + UVs + tangents** | 5 | Correct vertex count, UInt32 index, UVs assigned, tangents recalculated. |
+| **Layer isolation** | 5 | Placeholder Ground.mat is plain gray; no PBR/splat/grass/tinting bled in. |
+| **Performance** | 4 | Full pipeline (FBM + erosion + Priority-Flood + carve) under 15 seconds for 501x501. |
 
 ### Visual Quality (20 points)
 
 | Criterion | Points | Full marks |
 |-----------|--------|------------|
-| **Landscape readability** | 8 | Terrain looks like a real place from any camera angle. |
-| **Color coherence** | 8 | Rock reads as rock. No green mountain slopes. |
-| **Sun influence** | 4 | Directional tint baked in. |
+| **Landscape readability** | 8 | Reads as a coherent place: mountains drain into valleys, valleys host rivers. |
+| **River believability** | 8 | Rivers visibly meander, widen downstream, exit the map at logical low points. |
+| **No artifacts** | 4 | No grid banding, no axis-aligned stair-stepping, no orphan pits or floating water. |
 
 ---
 
