@@ -104,6 +104,14 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Key rules:** Clouds are high above terrain (120m+ above max height). Shadow casting OFF. Does NOT modify any previous layer.
 - **Scoring:** 100-point rubric covering cloud shape quality (35), distribution quality (30), technical quality (25), visual quality (10).
 
+### Layer 7 — Horizon closure (mountain ring)
+
+- **Primary prompt:** [context/generate-horizon-closure.md](context/generate-horizon-closure.md)  
+- **Requires:** Layer 1 completed. Terrain bounds needed for ring placement.
+- **Deliverables:** `HorizonRing` parent with 8 segments (4 sides + 4 corners). Procedural mountain meshes surrounding the terrain to hide the void. Seamless height blending at terrain edges.
+- **Key rules:** Ring sits OUTSIDE terrain bounds. Inner edge heights must match terrain edge heights exactly. Does NOT modify any previous layer.
+- **Scoring:** 100-point rubric covering geometry quality (35), blending quality (30), technical quality (20), visual quality (15).
+
 ---
 
 ## Core prompt library (all `.md` files in this benchmark)
@@ -121,6 +129,7 @@ These files are the **source of truth** for copy/paste prompts. The benchmark is
 | [context/props/generate-rock.md](context/props/generate-rock.md)                           | Rocks: singles, lines, mounds                 |
 | [context/generate-lighting-post-processing.md](context/generate-lighting-post-processing.md) | Lighting, shadows, post-processing            |
 | [context/generate-sky-clouds.md](context/generate-sky-clouds.md)                           | Sky & clouds from primitives                  |
+| [context/generate-horizon-closure.md](context/generate-horizon-closure.md)                 | Horizon mountain ring                         |
 
 
 

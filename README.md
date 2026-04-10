@@ -39,6 +39,7 @@ If your agent starts creating `.cs` files in your Assets folder instead of calli
 | **4** | Props (trees, rocks) | `context/generate-props.md` |
 | **5** | Lighting & post-processing | `context/generate-lighting-post-processing.md` |
 | **6** | Sky & clouds | `context/generate-sky-clouds.md` |
+| **7** | Horizon closure | `context/generate-horizon-closure.md` |
 
 Each layer builds on top of the previous one. Never skip layers. Each layer only ADDS to the scene — it must not modify previous layers' output.
 
