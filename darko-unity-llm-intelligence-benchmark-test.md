@@ -108,7 +108,7 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 
 - **Primary prompt:** [context/generate-horizon-closure.md](context/generate-horizon-closure.md)  
 - **Requires:** Layer 1 completed. Terrain bounds needed for ring placement.
-- **Deliverables:** `HorizonRing` parent with 8 segments (4 sides + 4 corners). Procedural mountain meshes surrounding the terrain to hide the void. Seamless height blending at terrain edges.
+- **Deliverables:** `HorizonRing` parent with single continuous perimeter mesh. Procedural mountain ring surrounding the terrain to hide the void. Ring forest trees bridging the boundary. Seamless height blending at terrain edges.
 - **Key rules:** Ring sits OUTSIDE terrain bounds. Inner edge heights must match terrain edge heights exactly. Does NOT modify any previous layer.
 - **Scoring:** 100-point rubric covering geometry quality (35), blending quality (30), technical quality (20), visual quality (15).
 

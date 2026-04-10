@@ -35,17 +35,18 @@ IMPORTANT RULES:
    The ring is a continuous strip of procedural mountain mesh that surrounds the terrain.
 
    Ring dimensions:
-   - Inner edge: starts at terrain bounds (or 5-10m overlap for seamless blending).
+   - Inner edge: overlaps 20m INTO the terrain bounds for seamless blending (no gap).
    - Outer edge: extends 150-250m beyond terrain bounds.
    - Ring width: 150-250m (the depth of the mountain wall).
 
-   Build the ring as 4 side segments (North, South, East, West) plus 4 corner segments.
-   Each segment is a separate mesh for manageable vertex counts.
+   Build as a single continuous mesh walking around the terrain perimeter.
+   Use 300-400 perimeter sample points with radial strips extending outward.
+   The first several radial steps go INWARD into terrain (matching terrain height exactly),
+   then the rest go outward forming mountains.
 
-   Per segment:
-   - Create a grid of vertices spanning the segment area.
-   - Resolution: ~5m spacing between vertices (enough for mountain shapes).
-   - Inner row vertices: match terrain edge height for seamless join.
+   Per radial strip:
+   - Inner vertices (inside terrain): height = terrain height at that XZ (seamless weld).
+   - Resolution: 25-30 radial steps from inner to outer.
    - Height generation using Perlin noise:
      Base height = terrain edge average height.
      Add mountain noise: 3 octaves, k=[0.008, 0.02, 0.06], a=[40, 15, 5].
@@ -55,37 +56,39 @@ IMPORTANT RULES:
    - Outermost row: vertices drop below the horizon (Y = -20) to hide the bottom edge.
 
 3. RING MATERIAL
-   - Use the same Ground.mat from the terrain OR create Assets/Materials/HorizonRock.mat.
-   - If creating new material:
-     Shader: Universal Render Pipeline/Lit
-     Base Color: rock-like gray-brown (0.38, 0.35, 0.30) — matches terrain rock zones.
-     Smoothness: 0.08 (rough rock).
-     Metallic: 0.0.
-   - The ring should NOT look out of place — it should read as distant mountains
-     that are part of the same landscape.
+   - Use the SAME Ground.mat from the terrain. This ensures the ring follows the same
+     splat-mapped appearance (grass, rock, snow zones) and responds to lighting/tonemapping
+     consistently.
+   - Map UVs to terrain UV space: uv.x = (worldX - terrainMinX) / terrainWidth,
+     uv.y = (worldZ - terrainMinZ) / terrainDepth. This makes the terrain texture
+     extend seamlessly onto the ring.
+   - Call RecalculateTangents() so normal maps and lighting work correctly on the ring mesh.
 
-4. COLORING (if using vertex colors or a dedicated tint texture)
-   - Inner edge: match terrain edge colors (grass/rock blend).
-   - Middle: transition to rock gray.
-   - Outer/top: darker rock or snow on peaks if tall enough.
-   - Simple approach: use a solid rock material — distant mountains reading as
-     gray rock is natural and expected.
+4. RING FOREST
+   Place trees on the ring to make the boundary between terrain and ring invisible.
+   Trees bridge the gap and make the ring look like a natural extension of the landscape.
+
+   - Add a temporary MeshCollider to the ring mesh for raycasting.
+   - Scatter trees in a band from 15m inside terrain edge to 100m outside.
+   - Skip the terrain interior (already has trees from Layer 4).
+   - Use noise-based density (k=0.015, threshold 0.35) for natural clustering.
+   - Trees on the ring are slightly smaller (4-6.5m trunk height) — "distance trees".
+   - Skip placement if: height < 0 (dropped edge), height > 80% of max (peaks),
+     slope > 0.45 (cliffs).
+   - Cell size: 8m (denser than Layer 4 to create thick forest border).
+   - Target: 1500-2500 ring trees for a 500x500 map.
+   - Use same TreeBark.mat and TreeLeaves.mat from Layer 4.
+   - Add ring trees under the existing "Trees" parent (same hierarchy as Layer 4 trees).
+   - Remove the temporary MeshCollider when done.
 
 5. SHADOW AND RENDERING
    - Shadow casting: ON (ring mountains should cast shadows for realism).
    - Receive shadows: ON.
-   - No MeshCollider needed (player doesn't walk on the ring).
+   - No permanent MeshCollider needed (player doesn't walk on the ring).
 
 6. HIERARCHY
    HorizonRing (root, position 0,0,0, scale 1,1,1)
-   ├── Ring_North
-   ├── Ring_South
-   ├── Ring_East
-   ├── Ring_West
-   ├── Ring_Corner_NE
-   ├── Ring_Corner_NW
-   ├── Ring_Corner_SE
-   └── Ring_Corner_SW
+   └── Ring_Full (single continuous mesh)
 
 7. SEAMLESS BLENDING
    The most critical aspect: where the ring meets the terrain edge, there must be
@@ -93,12 +96,13 @@ IMPORTANT RULES:
 
    - Sample terrain mesh vertices near each edge.
    - Set ring inner-row vertex heights to match the sampled terrain heights.
-   - Overlap the ring 5-10m into the terrain bounds so the meshes blend together.
-   - The color/material at the inner edge should be compatible with the terrain edge appearance.
+   - Overlap the ring 20m into the terrain bounds so the meshes blend together.
+   - The material (Ground.mat) ensures the ring follows the same splat-mapped appearance.
 
 8. REPORT
    Return summary:
-   - Segment count and vertex counts per segment
+   - Vertex count
+   - Ring tree count
    - Ring width (inner to outer edge)
    - Height range of ring mountains
    - Material used
@@ -170,10 +174,10 @@ IMPORTANT RULES:
 
 | Problem | Solution |
 |---------|----------|
-| Gap visible in a direction | Add segment or extend existing segment to cover. Check corners. |
+| Gap visible in a direction | Ensure continuous perimeter mesh covers all directions including corners. |
 | Visible seam at terrain edge | Sample terrain edge heights and match ring inner vertices exactly. |
 | Ring looks like a wall | Add more noise octaves for mountain variation. Vary peak heights. |
-| Z-fighting at seam | Overlap ring 5-10m into terrain. Or offset ring Y by 0.1 at seam. |
+| Z-fighting at seam | Overlap ring 20m into terrain. Or offset ring Y by 0.1 at seam. |
 | Bottom of ring visible | Drop outermost row vertices to Y = -20 or lower. |
 | Ring too tall / dominates | Reduce peak height multiplier. Ring peaks should be 60-120% of terrain max. |
 | Ring too short / void visible | Increase peak height. Ensure outermost row is below camera frustum. |
@@ -183,8 +187,8 @@ IMPORTANT RULES:
 
 ## Technical Notes
 
-### Why 8 segments instead of one ring mesh?
-A single continuous ring mesh for a 500x500 map would have a very high vertex count. Breaking it into 4 sides + 4 corners keeps each mesh manageable and allows different LOD treatment if needed.
+### Why a single continuous ring mesh?
+A single continuous perimeter mesh ensures no gaps at corners or segment boundaries. With 300-400 perimeter points and 25-30 radial steps, the vertex count (~12,000-15,000) is manageable for a single mesh and avoids the complexity of stitching segments together.
 
 ### Seamless blending strategy
 The key insight is that the ring's inner edge must be a slave to the terrain's outer edge. Sample the terrain mesh at its boundary, then set the ring's inner vertices to exactly those positions and heights. This creates a geometric weld between the two meshes.

@@ -23,7 +23,7 @@ rendering settings to make the scene look polished and realistic.
 
 1. DIRECTIONAL LIGHT (Sun)
    - Find or create a Directional Light named "Sun".
-   - Rotation: (50, -30, 0) — sun angled from upper-left, creates long shadows across terrain.
+   - Rotation: (45, 150, 0) — sun angled to create long shadows across terrain, lighting the map from front.
    - Color: warm sunlight (1.0, 0.97, 0.92) — NOT pure white.
    - Intensity: 3.0 (bright, ensures terrain is well-lit).
    - Shadow type: Soft Shadows.
