@@ -1,32 +1,40 @@
 # Darko Unity LLM Intelligence Benchmark Test
 
-A reproducible benchmark for testing whether AI coding agents can generate procedural 3D worlds inside the Unity Editor — not by writing script files, but by driving the editor directly through [Unity MCP](https://github.com/niceholmgren/mcp-for-unity).
+A reproducible benchmark for testing whether AI coding agents can generate procedural 3D worlds inside the Unity Editor — by driving the editor directly through [Unity MCP](https://github.com/niceholmgren/mcp-for-unity), or by writing C# scripts the user runs in the editor.
 
 ## What this tests
 
-Can an AI agent build a realistic landscape with terrain, water, and props by executing C# code in the Unity Editor at runtime? The benchmark scores planning, API correctness, asset generation, and whether the agent actually finishes.
+Can an AI agent build a realistic landscape with terrain, water, and props by generating and executing C# code in the Unity Editor? The benchmark scores planning, API correctness, asset generation, and whether the agent actually finishes.
 
 ## Requirements
 
 - **Unity 2022.3+** with **URP** (Universal Render Pipeline)
-- **Unity MCP server** installed and running ([mcp-for-unity](https://github.com/niceholmgren/mcp-for-unity))
-- An AI coding agent that supports MCP tool calling (Claude Code, Cursor, Windsurf, etc.)
+- An AI coding agent (Claude Code, Cursor, Windsurf, Copilot, etc.)
+- **Unity MCP server** (recommended) — [mcp-for-unity](https://github.com/niceholmgren/mcp-for-unity)
 
 ## How agents should work
 
-**Agents must execute C# code through Unity MCP's `execute_code` tool — NOT write `.cs` script files into the project.**
+There are two valid execution paths:
 
-The MCP server lets agents run C# directly in the Unity Editor (like typing into an immediate-mode console). This is how terrain gets built, textures get baked, meshes get created, and materials get assigned — all at runtime through MCP calls.
+### Path A — Unity MCP (recommended)
 
-If your agent starts creating `.cs` files in your Assets folder instead of calling MCP tools, it is doing it wrong. The benchmark tests runtime editor manipulation, not traditional scripting.
+The agent executes C# code directly in the Unity Editor through Unity MCP's `execute_code` tool. No script files are written — code runs immediately at runtime like an editor console. This is the fastest feedback loop and the preferred path.
+
+**Setup:** Install and connect the [Unity MCP server](https://github.com/niceholmgren/mcp-for-unity), then use an agent that supports MCP tool calling.
+
+### Path B — C# scripts (no MCP required)
+
+The agent writes `.cs` Editor scripts into your Assets folder. Each script uses `[MenuItem]` or runs as an Editor utility that you trigger manually from the Unity menu. The agent tells you which script to run and in what order.
+
+**Setup:** No extra tools needed — just Unity and an AI coding agent.
 
 ## How to run
 
 1. Open a Unity project with URP configured
 2. Clone this repo into your project's `Assets/` folder
-3. Install and connect the Unity MCP server
+3. *(Optional)* Install and connect the Unity MCP server for Path A
 4. Give your agent the benchmark rules from `darko-unity-llm-intelligence-benchmark-test.md`
-5. Feed the agent each layer prompt in order (Layer 1 through Layer 4)
+5. Feed the agent each layer prompt in order (Layer 1 through Layer 7)
 6. Score results using the rubrics in each prompt file
 
 ## Layer plan (execute in order)

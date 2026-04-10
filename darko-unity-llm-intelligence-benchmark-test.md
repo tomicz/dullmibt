@@ -32,10 +32,22 @@ Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learni
 
 ## How to prompt the same (agent instructions)
 
-Give your model a **single system-style block** like this (adapt names/paths to your repo):
+### Execution paths
+
+**Path A — Unity MCP (recommended):** The agent calls Unity MCP's `execute_code` tool to run C# directly in the editor at runtime. No script files are written to disk. This is the fastest iteration loop.
+
+**Path B — C# scripts (no MCP required):** The agent writes `.cs` Editor scripts (using `[MenuItem]` or similar) that you run manually from the Unity menu. The agent generates the code; you execute it layer by layer.
+
+Both paths are valid for the benchmark. Path A is recommended because it eliminates the run-compile-run cycle and allows the agent to verify results immediately.
+
+---
+
+Give your model a **single system-style block** like this (adapt to your execution path):
 
 ```text
-You are a Unity Editor agent with MCP/tools that can execute editor C# and mutate the active scene.
+You are a Unity Editor agent. You will build a procedural 3D landscape in Unity, layer by layer.
+
+Execution: [MCP — call execute_code for each layer] OR [Scripts — write a C# Editor script per layer that I will run manually]
 
 Benchmark rules:
 1) Follow the layer plan in darko-unity-llm-intelligence-benchmark-test.md strictly in order.
