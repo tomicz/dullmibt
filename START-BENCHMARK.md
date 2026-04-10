@@ -243,23 +243,31 @@ Requirements:
 
 12. DATA SIDE-CHANNEL: HEIGHTMAP EXR
     - Path: Assets/BenchmarkRuns/{run-id}/Data/Heightmap.exr
-    - Format: TextureFormat.RGBAFloat, encoded with EncodeToEXR(EXRFlags.OutputAsFloat).
+    - Encode in C# from a TextureFormat.RGBAFloat Texture2D using EncodeToEXR().
+      Do NOT pass EXRFlags.OutputAsFloat — Unity's EXR importer collapses the asset
+      to RGBAHalf on disk anyway, and 16-bit float (~0.05m worst case at 75m) is
+      well below any meaningful terrain precision. Half is the canonical on-disk
+      format for this channel.
     - Channel layout:
-        R = world-space height in meters (raw float, NOT normalized)
+        R = world-space height in meters (raw, NOT normalized)
         G = 0, B = 0, A = 1
-    - Importer settings: sRGB OFF, filterMode Point, wrapMode Clamp,
-      textureCompression None, isReadable true.
+    - Importer settings (set explicitly via TextureImporter then SaveAndReimport):
+        sRGB OFF, filterMode Point, wrapMode Clamp,
+        textureCompression None, isReadable TRUE.
+      The importer defaults to non-readable for EXR; you MUST flip isReadable on
+      or downstream layers cannot call GetPixels().
 
 13. DATA SIDE-CHANNEL: FLOWMAP EXR
     - Path: Assets/BenchmarkRuns/{run-id}/Data/FlowMap.exr
-    - Format: TextureFormat.RGBAFloat, EncodeToEXR(OutputAsFloat).
+    - Encode the same way (RGBAFloat source Texture2D → EncodeToEXR(), no
+      OutputAsFloat flag). Final on-disk format will be RGBAHalf — that is correct.
     - Channel layout (one cell per pixel, exact same dimensions as the vertex grid):
         R = normalized flow accumulation (acc / maxAcc), 0..1
         G = river mask (1.0 inside any carved river band, 0 outside)
         B = carve depth in meters at this cell (0 outside river bands)
         A = centerline width radius in cells (0 outside river bands)
     - Importer settings: sRGB OFF, filterMode Point, wrapMode Clamp,
-      textureCompression None, isReadable true.
+      textureCompression None, isReadable TRUE.
 
 14. DATA SIDE-CHANNEL: TERRAIN.JSON
     - Path: Assets/BenchmarkRuns/{run-id}/Data/terrain.json
@@ -323,8 +331,8 @@ Requirements:
 |-----------|--------|------------|
 | **Random seed per run** | 6 | Seed sourced from DateTime.Now.Ticks; recorded in terrain.json. |
 | **Reproducibility metadata** | 4 | terrain.json contains seed + all parameters needed to replay. |
-| **Heightmap.exr** | 5 | RGBAFloat, R = raw meters, sRGB off, point filter, clamp, uncompressed, readable. |
-| **FlowMap.exr** | 6 | RGBAFloat with documented R/G/B/A = accNorm/mask/depth/width channels. |
+| **Heightmap.exr** | 5 | EXR (RGBAHalf on disk), R = raw meters, sRGB off, point filter, clamp, uncompressed, isReadable=true. |
+| **FlowMap.exr** | 6 | EXR (RGBAHalf on disk) with documented R/G/B/A = accNorm/mask/depth/width channels, isReadable=true. |
 | **Mesh + UVs + tangents** | 5 | Correct vertex count, UInt32 index, UVs assigned, tangents recalculated. |
 | **Layer isolation** | 5 | Placeholder Ground.mat is plain gray; no PBR/splat/grass/tinting bled in. |
 | **Performance** | 4 | Full pipeline (FBM + erosion + Priority-Flood + carve) under 15 seconds for 501x501. |
