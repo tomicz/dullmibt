@@ -33,38 +33,21 @@ The agent writes `.cs` Editor scripts into your Assets folder. Each script uses 
 ### Step 1 — Set up Unity
 
 - Create a Unity 2022.3+ project with **URP** (Universal Render Pipeline) configured
-- Clone this repo into your project's `Assets/` folder
+- *(Optional)* Install [Unity MCP](https://github.com/niceholmgren/mcp-for-unity) for Path A
 
-### Step 2 — Choose your execution path
+### Step 2 — Start the benchmark
 
-- **Path A (MCP):** Install and connect the [Unity MCP server](https://github.com/niceholmgren/mcp-for-unity)
-- **Path B (scripts):** No setup needed — the agent will write `.cs` files you run manually
+**Option A — with repo cloned:**
+Clone this repo into `Assets/` and point your agent at `START-BENCHMARK.md`.
 
-### Step 3 — Pick a run ID
+**Option B — no repo:**
+Copy the entire contents of `START-BENCHMARK.md` and paste it to your agent as the first message.
 
-Choose a unique name for this run, e.g. `claude-code-2026-04-10`. You'll use this in the next step. Every run gets its own isolated folder so you can compare agents later.
+`START-BENCHMARK.md` contains everything: global rules, run ID setup, and all 7 layer prompts in order. The agent runs all layers autonomously.
 
-### Step 4 — Give your agent the system prompt
+### Step 3 — Score the result
 
-Open `darko-unity-llm-intelligence-benchmark-test.md` and copy the agent instructions block. Fill in your **run ID** and **execution path**, then paste it to your agent as the first message (or system prompt).
-
-### Step 5 — Run each layer in order
-
-For each layer (1 through 7), copy the full contents of the layer's prompt file and send it to your agent. Wait for the layer to complete and verify before moving to the next.
-
-| Layer | Prompt file |
-|-------|-------------|
-| 1 — Terrain | `context/terrain/generate-realistic-terrain.md` |
-| 2 — Splat map | `context/terrain/generate-terrain-splat-map.md` |
-| 3 — Water | `context/terrain/generate-water-system.md` |
-| 4 — Props | `context/generate-props.md` |
-| 5 — Lighting | `context/generate-lighting-post-processing.md` |
-| 6 — Sky & clouds | `context/generate-sky-clouds.md` |
-| 7 — Horizon | `context/generate-horizon-closure.md` |
-
-### Step 6 — Score the result
-
-Each layer prompt includes a 100-point rubric at the bottom. Score each layer and total the results.
+Each layer section in `START-BENCHMARK.md` includes a 100-point rubric. Total score is out of 700.
 
 ## Run isolation
 
