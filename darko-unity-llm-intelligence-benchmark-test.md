@@ -87,16 +87,6 @@ Execute **one layer at a time**. Do not skip the **visual refresh handshake** af
 - **Key rules:** Each prop uses seeded random for uniqueness. Placement respects terrain zones — no props on peaks, cliffs, or in water. Natural distribution with noise-based clustering and clearings.
 - **Scoring:** 100-point rubric covering placement quality (40), prop quality (30), technical quality (20), visual quality (10).
 
-### Layer 5 — Horizon closure (optional hard tier)
-
-- Procedural **mountain ring** outside play bounds so the horizon is not infinite void.  
-- Not in a separate prompt file—tests whether the model can invent stable large meshes + placement without breaking Layer 1 rules.
-
-### Layer 6 — Performance tier (optional)
-
-- Add `LODGroup` on heavy chunk roots; tune `QualitySettings.lodBias`, URP `shadowDistance`, fog density vs clarity.  
-- Tests trade-offs without destroying art direction.
-
 ---
 
 ## Core prompt library (all `.md` files in this benchmark)
