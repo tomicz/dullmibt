@@ -349,132 +349,130 @@ Requirements:
 
 ---
 
-# Layer 2 — Terrain Splat Mapping
+# Layer 2 — Multi-Layer Context-Aware Terrain Bake
 
 ## Prerequisites
 
-- `ProceduralMeshGround` must already exist with a valid mesh and MeshCollider.
+- `ProceduralMeshGround` must exist with valid mesh, normals, and MeshCollider.
+- `RiverPath` with waypoint children must exist (OR `FlowMap.exr` for richer river data — see Section 5).
+- `Ground.mat` (URP Lit placeholder) must exist from Layer 1.
 - Layer 1 must be completed.
 
-## What is a splat map?
+## Approach
 
-A **splat map** is a texture where each color channel (R, G, B, A) stores the blend weight for a different terrain material.
+Layer 2 **abandons the classic "4-channel splat map + 4 tileable texture sets" approach**. Instead it uses **direct per-pixel procedural baking with N context rules and heightlerp blending** — the technique from Ghost Recon Wildlands / Far Cry 5 (GDC 2018) and Ryan Brucks's widely-cited Heightlerp post.
 
-| Channel | Terrain Type | Where it dominates |
-|---------|-------------|-------------------|
-| **R** | Grass | Plains, gentle hills |
-| **G** | Rock | Steep slopes (>0.35), high altitude (>45m) |
-| **B** | Dirt/Earth | River bed, river banks |
-| **A** | Snow | Mountain peaks (>55m), gentle slopes |
+**Why:** With baked output, there's no reason to be constrained by 4 RGBA channels. Evaluate 10+ layers per texel, keep the top 2, blend with height-aware transitions. This produces river banks that look different from hilltops, south slopes different from north slopes, and valleys different from ridges — all without custom shaders, all as baked textures assigned to a single URP Lit material.
 
----
+An earlier version of this spec tried the classic 4-biome splat + tileable approach. It looked like a checkerboard of garish noise patterns because tileable textures at realistic tile counts (~40 repeats) expose their repetition brutally. Don't go back to that approach.
 
-## Layer 2 Prompt
+## Context data computed at bake time
 
-```text
-Apply terrain splat mapping to the existing ProceduralMeshGround in the active Unity scene.
+For every output texel, sample (from the mesh and precomputed grids):
 
-Three steps:
-A) Generate the splat map texture from terrain data
-B) Generate tileable PBR texture sets for each terrain zone
-C) Bake composite terrain textures by blending zone textures weighted by the splat map
+- **height** (m) — bilinear from mesh vertex Y
+- **slope** — `1 - max(0, normal.y)`, bilinear from mesh normals
+- **curvature** — `h - avg(h ± 1 neighbor)` on the vertex grid, bilinear. Positive = ridge, negative = valley.
+- **aspect** — `-dot(normalXZ, sunDirXZ)` where both are normalized XZ vectors. Positive = sun-facing slope (south-ish for a northern-hemisphere sun), negative = shaded (north-ish).
+- **distToRiver** — precomputed 256×256 grid of brute-force distance to the RiverPath polyline OR (preferred) the `FlowMap.exr` G-channel river mask. Bilinear-sampled per output texel.
 
-1. READ TERRAIN DATA
-   - Find "ProceduralMeshGround" — get its MeshFilter mesh vertices, normals, and transform scale.
-   - Compute per-vertex: height (vertex.y), slope (1 - dot(normal, up)).
-   - Find "RiverPath" if it exists — reconstruct the river polyline from child transforms.
-   - Record height range (minH, maxH) from mesh vertices.
+## Critical smoothstep note
 
-2. GENERATE SPLAT MAP (Assets/BenchmarkRuns/{run-id}/Textures/TerrainSplatMap.png)
-   - Resolution: 1024x1024, RGBA32, linear color space.
-   - For each pixel, map to terrain vertex grid (bilinear interpolation) and compute:
-     height, slope, and distance to river.
+All rule formulas use **HLSL-style `smoothstep(edge0, edge1, x)`**: `0 when x<=edge0, 1 when x>=edge1, cubic 3t²−2t³ in between`. Do **NOT** use Unity's `Mathf.SmoothStep(from, to, t)` — that function returns a smoothly-interpolated value between `from` and `to` (not a [0,1] edge mask) and will produce garbage weights. Write your own:
 
-   Channel weight rules (order of priority, highest first):
-
-     SNOW (A channel):
-       weight = smoothstep(50, 60, height) * (1 - smoothstep(0.2, 0.35, slope))
-
-     DIRT (B channel):
-       If river exists:
-         riverBed: distance < 10 → weight = 1.0
-         riverBank: distance 10-22 → weight = smoothstep(22, 10, distance) * 0.8
-       Also add dirt on very steep low-altitude areas:
-         weight += smoothstep(0.5, 0.7, slope) * smoothstep(30, 0, height) * 0.4
-
-     ROCK (G channel):
-       weight = max(smoothstep(0.3, 0.55, slope), smoothstep(40, 55, height) * 0.6)
-       weight *= (1 - snowWeight) * (1 - dirtWeight * 0.5)
-
-     GRASS (R channel):
-       weight = max(0, 1 - snowWeight - rockWeight - dirtWeight)
-
-   - Normalize: total = R + G + B + A. If total > 0, divide each by total.
-   - Import settings: sRGB OFF (linear), isReadable = true.
-
-3. GENERATE TILEABLE PBR TEXTURE SETS (procedural, 512x512 each)
-
-   GRASS textures (Assets/BenchmarkRuns/{run-id}/Textures/SplatGrass*.png):
-   - Albedo: Base green (0.28, 0.52, 0.18) with multi-octave noise variation.
-   - Normal: Vertical blade-like pattern. Frequency: k=0.15.
-   - Mask: R=metallic~0, G=AO 0.6-1.0, A=smoothness 0.15-0.35.
-
-   ROCK textures (Assets/BenchmarkRuns/{run-id}/Textures/SplatRock*.png):
-   - Albedo: Gray-brown base (0.38, 0.36, 0.32) with craggy noise.
-   - Normal: Strong normals (normalStrength 2.0-3.0).
-   - Mask: metallic~0.02, AO 0.4-1.0, smoothness 0.15-0.30.
-
-   DIRT textures (Assets/BenchmarkRuns/{run-id}/Textures/SplatDirt*.png):
-   - Albedo: Earth brown base (0.32, 0.24, 0.16).
-   - Normal: Gentle normals, normalStrength ~1.0.
-   - Mask: metallic~0, AO 0.7-1.0, smoothness 0.20-0.45.
-
-   SNOW textures (Assets/BenchmarkRuns/{run-id}/Textures/SplatSnow*.png):
-   - Albedo: Near-white base (0.92, 0.93, 0.96).
-   - Normal: Very soft normals, normalStrength ~0.5.
-   - Mask: metallic~0, AO 0.85-1.0, smoothness 0.40-0.65.
-
-   Import settings for all:
-   - Albedo: sRGB ON, wrap mode = Repeat
-   - Normal: texture type = Normal Map, wrap mode = Repeat
-   - Mask: sRGB OFF (linear), wrap mode = Repeat
-
-4. BAKE COMPOSITE TERRAIN TEXTURES
-   Tiling factor = 40 for 512px tiles across 1024px output.
-
-   COMPOSITE ALBEDO (Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png — replaces existing, 2048x2048):
-     color = grassAlbedo * R + rockAlbedo * G + dirtAlbedo * B + snowAlbedo * A
-     Apply sun exposure tint: color *= lerp(0.88, 1.12, smoothstep(0.2, 0.8, sunExposure))
-
-   COMPOSITE NORMAL (Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png — replaces existing, 2048x2048):
-     n = normalize(grassNormal * R + rockNormal * G + dirtNormal * B + snowNormal * A)
-
-   COMPOSITE MASK (Assets/BenchmarkRuns/{run-id}/Textures/GroundMaskMap.png — new, 1024x1024):
-     R = blended metallic, G = blended AO, B = 0, A = blended smoothness.
-
-5. ASSIGN TO MATERIAL
-   - Load Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat
-   - Set _BaseMap = composite albedo
-   - Set _BumpMap = composite normal, _BumpScale = 1.0
-   - Set _MaskMap = composite mask
-   - Set _BaseColor = white
-   - Mark material dirty, save assets.
-
-6. REPORT
-   Return: splat map path, channel coverage %, tileable texture paths, composite texture paths,
-   material assignments confirmed.
+```
+float ss(float e0, float e1, float x) {
+    float t = saturate((x - e0) / (e1 - e0));
+    return t * t * (3f - 2f * t);
+}
 ```
 
----
+## Layers (10)
 
-## Layer 2 Scoring Rubric (100 points)
+Each has: base RGB, noise seed + frequency, height-noise seed + frequency, heightlerp bias, and PBR mask values.
+
+| # | Name | Weight rule | Base color |
+|---|------|-------------|-----------|
+| 0 | grass-lush | `(1 - ss(0.1, 0.35, slope)) * ss(30, -5, h) * (0.5 + 0.5 * ss(0.2, -0.5, curv))` | dark damp green |
+| 1 | grass-dry | `(1 - ss(0.1, 0.4, slope)) * ss(-5, 25, h) * (1 - ss(35, 55, h))` | olive |
+| 2 | grass-bleached | `(1 - ss(0.05, 0.4, slope)) * ss(-0.1, 0.5, aspect) * ss(-5, 20, h) * (1 - ss(38, 55, h))` | pale yellow-green |
+| 3 | rock-exposed | `ss(0.22, 0.4, slope) + ss(35, 55, h) * ss(-0.2, 0.5, curv) * 0.9` (clamp 1.2) | gray |
+| 4 | rock-mossy | `rockyness * ss(0.4, -0.4, aspect) * ss(0.3, -0.3, curv) * ss(55, 15, h)` | mossy green-gray |
+| 5 | mud-wet | `ss(6, 0, distR) * (1 - ss(0.1, 0.35, slope)) * 1.6` | dark brown |
+| 6 | dirt-dry | `max(bankFringe, steepLowAlt)` | earth brown |
+| 7 | scree | `ss(0.28, 0.45, slope) * ss(15, 45, h) * (1 - ss(0.55, 0.75, slope))` | gravel |
+| 8 | snow-packed | `ss(50, 62, h) * (1 - ss(0.12, 0.32, slope))` | white |
+| 9 | snow-blown | `ss(55, 68, h) * ss(0.1, 0.28, slope) * 0.6` | pale gray-white |
+
+- `bankFringe = ss(28, 8, distR) * (1 - ss(0.1, 0.5, slope))`
+- `steepLowAlt = ss(0.4, 0.65, slope) * ss(25, 0, h)`
+- `rockyness = ss(0.15, 0.35, slope) + ss(30, 50, h) * 0.4`
+
+Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heightFreq ≈ 0.28–0.65`, `variation ≈ 0.04–0.16` (low for snow, higher for rock). Use independent seed offsets per layer and per field (albedo noise vs height noise).
+
+## Bake algorithm (per output texel)
+
+```
+1. Sample context: height, slope, curv, aspect, distR, meshNormal (bilinear from grids)
+2. Evaluate all 10 layer weights; keep top-2 (id0, W0) and (id1, W1)
+3. If W0 < 1e-3 default to grass-dry (id=1) to avoid empty pixels
+4. For top 2 layers, procedural color + height from world-space FBM:
+     albedo_i = baseRGB_i * (1 + (fbm2(worldXY, noiseSeed_i, freq_i) - 0.5) * 2 * variation_i)
+     layerHeight_i = fbm2(worldXY, heightSeed_i, heightFreq_i) + heightBias_i
+5. Heightlerp (Brucks):
+     hA = layerHeight_0 + W0 * weightScale      // weightScale ≈ 5
+     hB = layerHeight_1 + W1 * weightScale
+     hMax = max(hA, hB); k = 0.25               // blend width
+     mA = max(hA - hMax + k, 0); mB = max(hB - hMax + k, 0)
+     albedo = (albedo_0 * mA + albedo_1 * mB) / (mA + mB)
+6. Macro overlay (kills the "uniform wallpaper" look, adds meso-scale variation):
+     macro = 0.5 * Perlin(worldXY / 30m) + 0.5 * Perlin(worldXY / 80m)
+     albedo *= lerp(0.85, 1.15, macro)
+7. Sun exposure tint (uses mesh normal, not per-layer normal):
+     sunExp = saturate(dot(meshNormal, -sunDir))
+     albedo *= lerp(0.85, 1.15, ss(0.2, 0.8, sunExp))
+8. Normal map: gradient of the macro overlay (2 extra Perlin taps). Keep subtle.
+9. Mask map: from top layer's height noise
+     metallic = layerMetallic[id0]
+     AO = lerp(layerAOmin[id0], layerAOmax[id0], layerHeightNoise_0)
+     smoothness = lerp(layerSMmax[id0], layerSMmin[id0], layerHeightNoise_0)
+```
+
+`fbm2(worldXY, seed, freq)` is 2-octave FBM at world-space coordinates. Sampling world-space (not UV-space) means the bake doesn't need tileable textures at all — noise naturally fills the map. No tiling artifacts.
+
+## Output files
+
+- `Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png` (1024², sRGB, albedo composite)
+- `Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png` (1024², linear, normal map)
+- `Assets/BenchmarkRuns/{run-id}/Textures/GroundMaskMap.png` (1024², linear, R=metallic, G=AO, A=smoothness)
+
+**No intermediate tileable texture files** are written. Earlier per-biome `Splat{Grass|Rock|Dirt|Snow}{Albedo|Normal|Mask}.png` files from the old spec should be deleted if present.
+
+## Material assignment
+
+On `Ground.mat` (URP Lit):
+- `_BaseMap` = GroundHeightTint.png, `_BaseColor` = white
+- `_BumpMap` = GroundNormalMap.png, `_BumpScale` = 1.0, keyword `_NORMALMAP` enabled
+- `_MetallicGlossMap` / `_MaskMap` / `_OcclusionMap` = GroundMaskMap.png
+- Keywords `_METALLICSPECGLOSSMAP`, `_MASKMAP`, `_OCCLUSIONMAP` enabled
+
+## Performance & budget
+
+- 10 layer rule evaluations + top-2 selection per texel (~50 inlined smoothsteps).
+- 2 × 2-octave FBM for albedo + 2 × 2-octave for heightlerp + 2-tap macro + 2-tap normal gradient ≈ 14 Perlin calls per texel.
+- 1024² output ≈ 14M Perlin calls → ~15–25s in CodeDom C#.
+- **2048² output will likely exceed the MCP execute_code timeout**. If you need higher resolution, split the bake across multiple execute_code calls (top half / bottom half) or precompute an intermediate EXR for layer IDs and do a second pass for albedo.
+- Inline the smoothstep, distance, and bilinear helpers — closure invocation overhead is measurable in CodeDom.
+
+## Scoring rubric (100 points)
 
 | Category | Points |
 |----------|--------|
-| Splat Map Quality (channel separation, transitions, river awareness, normalization) | 30 |
-| Tileable Texture Quality (visual identity, tileability, PBR correctness, color coherence) | 30 |
-| Composite Bake Quality (blending, tiling detail, normal composition, sun exposure) | 25 |
-| Technical Quality (texture specs, material setup, performance) | 15 |
+| Layer count and diversity (≥6 layers actively winning different regions) | 25 |
+| Context awareness (river banks, aspect, curvature visibly affect output) | 25 |
+| Heightlerp quality (interlocking transitions, not linear fades) | 20 |
+| Macro overlay + sun exposure (no wallpaper look, visible light direction) | 15 |
+| Technical correctness (HLSL smoothstep, URP Lit keywords, importer settings, world-space noise) | 15 |
 
 ---
 
