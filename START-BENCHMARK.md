@@ -1080,3 +1080,174 @@ Three specific API mistakes caused compilation errors:
 - [ ] Add `safety_checks: false` whenever the call uses `AssetDatabase.DeleteAsset` or `File.Delete`
 - [ ] Always write `UnityEngine.Object.DestroyImmediate`, not `Object.DestroyImmediate`
 - [ ] Shadow distance → `QualitySettings.shadowDistance`, not `Light.shadowDistance`
+
+---
+
+---
+
+## Final Step — Run Report
+
+**After completing all 6 layers**, write a run report to disk as a local Markdown file. This file is never pushed to any repository — it is a local artifact used for comparing runs across agents and building training data.
+
+### Where to save
+
+```
+Assets/BenchmarkRuns/{run-id}/run-report.md
+```
+
+Write the file using `System.IO.File.WriteAllText` inside an `execute_code` call (with `safety_checks: false`).
+
+### What to include
+
+The report must contain every field listed below. If a layer failed entirely, record what was attempted and what the error was. Do not skip sections.
+
+---
+
+```markdown
+# Benchmark Run Report
+
+**Run ID:** {run-id}
+**Date:** {YYYY-MM-DD from System.DateTime.Now}
+**Agent:** {your self-identification slug, same as the run ID prefix}
+**Execution mode:** MCP — all layers via execute_code, no .cs files written
+  OR: Script fallback — .cs Editor scripts written under Assets/BenchmarkRuns/{run-id}/Editor/
+
+---
+
+## Layer 1 — Terrain Mesh + Hydrology
+
+- Seed: {seed} (recorded in terrain.json for replay)
+- Map size: {localSizeX}×{localSizeZ}m, {vertsX}×{vertsZ} verts ({N} vertices total), {triCount} triangles
+- Height range: {minH}m to {maxH}m
+- FBM octaves: 5, domain-warped, continental tilt applied
+- Erosion droplets simulated: {numDroplets}
+- Depressions filled (Priority-Flood): {deprFilled}
+- Max flow accumulation: {maxAcc}
+- River systems: {riverSystemCount}, River cells: {riverCellCount}
+- Carve depth range: {carveDepthMin}–{carveDepthMax}m
+- Width radius range: {widthRadiusMin}–{widthRadiusMax} cells
+- RiverPath waypoints: {waypointCount}
+- Assets: {meshPath}, {heightmapPath}, {flowmapPath}, {jsonPath}
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+## Layer 2 — Multi-Layer Context-Aware Bake
+
+- Output resolution: {bakeSize}×{bakeSize}px
+- Layer count: {layerCount} (list active layer names)
+- River distance method: Chamfer two-pass feature transform
+- Heightlerp k: {k}
+- Macro overlay: yes/no
+- Sun exposure tint: yes/no
+- Assets: {albedoPath}, {normalPath}, {maskPath}
+- Material slots assigned: _BaseMap, _BumpMap, _MetallicGlossMap, _OcclusionMap
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+## Layer 3 — River Water System
+
+- Approach: {FlowMap mask-based / RiverPath polyline / other}
+- Water mesh vertices: {vertCount}
+- Water mesh triangles: {triCount}
+- River cells covered: {riverCellCount}
+- Bank radius: {bankRadius} cells, Sink below bank: {sinkBelowBank}m
+- Blur passes: {blurPasses}
+- Edge inset: {insetCells} cells
+- Material: {shader}, alpha {alpha}, smoothness {smoothness}
+- Assets: {meshPath}, {materialPath}
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+## Layer 4 — Pine Forest
+
+- Algorithm: {Bridson Poisson-disk / uniform jitter / other}
+- Bridson seeds: {seedCount}
+- Candidates generated: {candidateCount}
+- Trees placed after filtering: {treeCount}
+- Forest mask: FBM 3-octave, smoothstep sharpened
+- Radius range: {minRadius}m (dense) – {maxRadius}m (sparse)
+- Placement filters: height < -2 rejected, height > 55 rejected, slope > 0.45 rejected, distToRiver < 4m rejected
+- Scale distribution: {description e.g. "power-law 0.75–1.65"}
+- Orientation: {slerp fraction} slerp toward terrain normal
+- GPU instancing: enabled / disabled
+- Shared meshes: {barkMeshPath}, {leavesMeshPath}
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+## Layer 5 — Lighting & Post-Processing
+
+- Sun rotation: ({x}°, {y}°, {z}°), color: ({r}, {g}, {b}), intensity: {intensity}
+- Shadow type: {soft/hard}, cascades: {n}, distance: {dist}m
+- Ambient mode: {trilight/flat/skybox}
+- Skybox: {procedural/custom/none}
+- Post-processing overrides active: {list e.g. Tonemapping(ACES), Bloom, ColorAdjustments, Vignette}
+- Bloom: threshold {t}, intensity {i}
+- Color adjustments: exposure {e}, contrast {c}, saturation {s}
+- Vignette: intensity {v}
+- SSAO: {enabled with intensity X / skipped}
+- Camera: FOV {fov}, near {near}, far {far}, AA: {SMAA/FXAA/none}
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+## Layer 6 — Sky & Clouds
+
+- Cloud groups: {count}
+- Total sphere puffs: {count}
+- Cloud base altitude: {altitude}m (terrain peak {terrainMax}m + {minClearance}m)
+- Type breakdown: Cumulus {n}, Wisp {n}, Small puff {n}
+- Puffs per group range: {min}–{max}
+- Shadow casting: none
+- Asset: {materialPath}
+- execute_code calls for this layer: {count} ({failCount} failed, {successCount} succeeded)
+
+---
+
+## Execution Call Log
+
+Total execute_code calls: {total}
+Successful: {success}
+Failed: {failed}
+
+### Failed Calls
+
+{For each failed call, one entry:}
+
+#### Failed call {N} — {Layer name}, attempt {attempt number}
+
+- **Error type:** Compilation error / Runtime crash / Timeout / Safety check block
+- **Error message:** {exact error text or summary}
+- **Root cause:** {one sentence explanation}
+- **Fix applied:** {what was changed to make the next attempt succeed}
+
+---
+
+## Asset Index
+
+All assets written during this run:
+
+| Asset | Path |
+|-------|------|
+| Scene | Assets/BenchmarkRuns/{run-id}/run-scene.unity |
+| Terrain mesh | Assets/BenchmarkRuns/{run-id}/Meshes/GroundMesh.asset |
+| Ground material | Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat |
+| Heightmap | Assets/BenchmarkRuns/{run-id}/Data/Heightmap.exr |
+| FlowMap | Assets/BenchmarkRuns/{run-id}/Data/FlowMap.exr |
+| terrain.json | Assets/BenchmarkRuns/{run-id}/Data/terrain.json |
+| Albedo bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png |
+| Normal bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png |
+| Mask bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundMaskMap.png |
+| Water mesh | Assets/BenchmarkRuns/{run-id}/Meshes/RiverWaterMesh.asset |
+| Water material | Assets/BenchmarkRuns/{run-id}/Materials/Water.mat |
+| Pine bark mesh | Assets/BenchmarkRuns/{run-id}/Meshes/PineBark.asset |
+| Pine leaves mesh | Assets/BenchmarkRuns/{run-id}/Meshes/PineLeaves.asset |
+| Bark material | Assets/BenchmarkRuns/{run-id}/Materials/TreeBarkPine.mat |
+| Leaf material | Assets/BenchmarkRuns/{run-id}/Materials/TreeLeafPine.mat |
+| Cloud material | Assets/BenchmarkRuns/{run-id}/Materials/Cloud.mat |
+| Post-process profile | Assets/BenchmarkRuns/{run-id}/Settings/TerrainPostProcessProfile.asset |
+| **Run report** | Assets/BenchmarkRuns/{run-id}/run-report.md |
+```
+
+---
+
+### Rules for the run report
+
+- **Write it last.** Only generate the report after all 6 layers have completed (or after the final layer attempt, even if some layers failed).
+- **Be accurate.** Copy real numbers from your layer outputs — vertex counts, seed values, tree counts, etc. Do not estimate.
+- **Log every failed call.** Include every `execute_code` call that returned a compilation error, runtime exception, timeout, or safety-check block. Include the exact error message and what fix was applied.
+- **Do not omit skipped layers.** If a layer was not completed, write a section for it with status "Not completed" and the reason.
+- **File location is local only.** Save to `Assets/BenchmarkRuns/{run-id}/run-report.md`. Do not push this file to any remote repository.
