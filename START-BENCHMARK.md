@@ -169,11 +169,8 @@ Requirements:
        wzw = wz + (PerlinNoise(wx * 0.005 + 41.3, wz * 0.005 + 57.9) - 0.5) * 80;
    - 5-octave FBM with frequencies in cycles-per-meter and amplitudes in meters:
        k = [0.003, 0.008, 0.020, 0.050, 0.120]
-       a = [75,    42,    16,    5,     2   ]
+       a = [110,   38,    14,    5,     2   ]
      (Use seeded per-octave offsets so different runs produce different worlds.)
-     Rationale: a[0] reduced from 110→75 so the broadest continental swing
-     does not produce single deep chasms (-100m+) once the lowland flatten is gone.
-     a[1]/a[2] slightly raised to keep visible mid-frequency relief.
    - Gentle continental tilt: bias one edge lower so water has somewhere to drain to.
      Keep this small — erosion + Priority-Flood do the real basin work, the tilt is
      only here to break perfect symmetry and give rivers a preferred outflow direction.
@@ -226,26 +223,12 @@ Requirements:
        accNorm = sqrt(acc[c] / maxAcc)                            // 0..1
        widthCells = (0.55 + accNorm * 1.05) * 3.5 * jitter        // jitter 0.75..1.25 from Perlin
        depthMeters = 4.0 * (0.55 + accNorm * 0.95)
-   - SKIP centers within 2 cells of the map boundary. Carving right at the mouth
-     produces thin vertical walls at the mesh edge because the carve disk is only
-     partially applied inside the map. Let mouths just exit the map naturally.
    - Carve a soft-falloff disk centred on c into the DEM:
        for each cell within widthCells radius:
          t = distance / widthCells                                // 0..1
          falloff = 1 - smoothstep(0, 1, t)                        // 1 at center → 0 at edge
-         dAdd = depthMeters * falloff
-         // HARD CAP: no cell may be carved more than 6m below its original elevation.
-         // Adjacent centerline cells stack additively, and without this cap a dense
-         // cluster near a mouth can carve 30m+ creating a canyon that reads as a
-         // mesh artifact. 6m is enough for visible river valleys without spikes.
-         newCarve = carveDepth[n] + dAdd
-         if (newCarve > 6.0) dAdd = 6.0 - carveDepth[n]
-         dem[n] -= dAdd
-         carveDepth[n] = min(newCarve, 6.0)
-   - 5x5 box blur ONE pass over the river-band NEIGHBOURHOOD: any cell within 2
-     cells of a carved cell gets smoothed, not just the carved cells themselves.
-     This prevents cliff walls between a fully-carved cell and its uncarved neighbour
-     which previously produced visible vertical "leakage" in the mesh.
+         dem[n] -= depthMeters * falloff                          // additive over overlaps
+   - 3x3 box blur ONE pass over river-band cells only, to soften the carve.
    - Record per-cell carve depth and width radius for the FlowMap channels.
 
 10. WRITE DEM BACK TO MESH
