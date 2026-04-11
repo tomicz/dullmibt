@@ -374,7 +374,23 @@ For every output texel, sample (from the mesh and precomputed grids):
 - **slope** — `1 - max(0, normal.y)`, bilinear from mesh normals
 - **curvature** — `h - avg(h ± 1 neighbor)` on the vertex grid, bilinear. Positive = ridge, negative = valley.
 - **aspect** — `-dot(normalXZ, sunDirXZ)` where both are normalized XZ vectors. Positive = sun-facing slope (south-ish for a northern-hemisphere sun), negative = shaded (north-ish).
-- **distToRiver** — precomputed 256×256 grid of brute-force distance to the RiverPath polyline OR (preferred) the `FlowMap.exr` G-channel river mask. Bilinear-sampled per output texel.
+- **distToRiver** — distance (m) to nearest river cell. See "River distance and width" below.
+- **widthAtNearestRiver** — the width radius (in cells) of whichever river cell is closest. Allows zones to scale with river size. See "River distance and width" below.
+
+## River distance and width (critical)
+
+Use the **`FlowMap.exr` G-channel river mask**, NOT the `RiverPath` polyline. `RiverPath` only contains the primary river's ~36 waypoints — secondary rivers are invisible to it, and even the primary is coarsely sampled. The FlowMap G channel is `1` inside every carved river cell of every river system.
+
+Compute two grids via a **Chamfer distance feature transform** (two-pass, O(N)):
+
+- `distGrid[i]` = Euclidean-approximate meters from cell `i` to the nearest river-mask cell
+- `widthGrid[i]` = the `widthRadius` (FlowMap A channel) of that nearest cell, propagated along with the distance
+
+Initialisation: river cells (G > 0.5) set `dist=0` and `width = max(A, 3)` (clamp to minimum 3 cells ≈ 6m because EXR interpolation sometimes writes A=0 at river-mask pixels). Non-river cells set `dist=BIG, width=0`.
+
+Forward pass (top-left→bottom-right) and backward pass (bottom-right→top-left): at each cell, if any neighbor offers a shorter distance, copy BOTH its distance+edge-cost AND its `width` value. This propagates the nearest-cell's width to the whole grid.
+
+Sample per output texel via bilinear on `distGrid`, nearest-neighbor on `widthGrid` (preserve discontinuities at watershed boundaries).
 
 ## Critical smoothstep note
 
@@ -398,15 +414,29 @@ Each has: base RGB, noise seed + frequency, height-noise seed + frequency, heigh
 | 2 | grass-bleached | `(1 - ss(0.05, 0.4, slope)) * ss(-0.1, 0.5, aspect) * ss(-5, 20, h) * (1 - ss(38, 55, h))` | pale yellow-green |
 | 3 | rock-exposed | `ss(0.22, 0.4, slope) + ss(35, 55, h) * ss(-0.2, 0.5, curv) * 0.9` (clamp 1.2) | gray |
 | 4 | rock-mossy | `rockyness * ss(0.4, -0.4, aspect) * ss(0.3, -0.3, curv) * ss(55, 15, h)` | mossy green-gray |
-| 5 | mud-wet | `ss(6, 0, distR) * (1 - ss(0.1, 0.35, slope)) * 1.6` | dark brown |
-| 6 | dirt-dry | `max(bankFringe, steepLowAlt)` | earth brown |
+| 5 | mud-wet | `ss(mudOuter, mudInner, distR) * (1 - ss(0.1, 0.35, slope)) * 1.6` | dark brown |
+| 6 | dirt-dry | `steepLowAlt` only (do NOT add a river-bank fringe here) | earth brown |
 | 7 | scree | `ss(0.28, 0.45, slope) * ss(15, 45, h) * (1 - ss(0.55, 0.75, slope))` | gravel |
 | 8 | snow-packed | `ss(50, 62, h) * (1 - ss(0.12, 0.32, slope))` | white |
 | 9 | snow-blown | `ss(55, 68, h) * ss(0.1, 0.28, slope) * 0.6` | pale gray-white |
 
-- `bankFringe = ss(28, 8, distR) * (1 - ss(0.1, 0.5, slope))`
 - `steepLowAlt = ss(0.4, 0.65, slope) * ss(25, 0, h)`
 - `rockyness = ss(0.15, 0.35, slope) + ss(30, 50, h) * 0.4`
+
+### Width-scaled mud zone
+
+The mud-wet zone scales with the size of the nearest river:
+
+```
+widthMeters = widthAtNearestRiver * meshCellMeters   // meshCellMeters ≈ 2m typically
+mudFar   = max(2.0, widthMeters * 0.5)               // center-out radius
+mudInner = mudFar * 0.6                              // full-opacity radius
+mudOuter = mudFar * 1.4                              // fade-to-zero radius
+```
+
+The wide `mudInner..mudOuter` falloff range makes edges visibly soften into the surrounding layer (usually grass-lush). Big rivers get ~6–10m of mud; small streams get ~2–3m. This removes the "painted-on" look of a hard-cutoff mud band.
+
+**Do not add a dirt-dry bank fringe around mud.** It creates a double-ring (dark mud + lighter brown) that reads as fake. Let mud fade straight into grass via heightlerp.
 
 Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heightFreq ≈ 0.28–0.65`, `variation ≈ 0.04–0.16` (low for snow, higher for rock). Use independent seed offsets per layer and per field (albedo noise vs height noise).
 
@@ -422,9 +452,12 @@ Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heigh
 5. Heightlerp (Brucks):
      hA = layerHeight_0 + W0 * weightScale      // weightScale ≈ 5
      hB = layerHeight_1 + W1 * weightScale
-     hMax = max(hA, hB); k = 0.25               // blend width
+     hMax = max(hA, hB); k = 0.40               // blend width (soft transitions)
      mA = max(hA - hMax + k, 0); mB = max(hB - hMax + k, 0)
      albedo = (albedo_0 * mA + albedo_1 * mB) / (mA + mB)
+   // Note: k was 0.25 in an earlier tuning. 0.40 gives much softer transitions
+   // and is required when mud has a wide falloff range (otherwise mud edges
+   // snap sharply even though their weight is fading).
 6. Macro overlay (kills the "uniform wallpaper" look, adds meso-scale variation):
      macro = 0.5 * Perlin(worldXY / 30m) + 0.5 * Perlin(worldXY / 80m)
      albedo *= lerp(0.85, 1.15, macro)
@@ -468,11 +501,12 @@ On `Ground.mat` (URP Lit):
 
 | Category | Points |
 |----------|--------|
-| Layer count and diversity (≥6 layers actively winning different regions) | 25 |
-| Context awareness (river banks, aspect, curvature visibly affect output) | 25 |
-| Heightlerp quality (interlocking transitions, not linear fades) | 20 |
+| Layer count and diversity (≥6 layers actively winning different regions) | 20 |
+| Context awareness (river corridors, aspect, curvature visibly affect output) | 20 |
+| River realism (width-aware mud zones, smooth fade-out, no fake bank fringe) | 15 |
+| Heightlerp quality (interlocking transitions, soft k≈0.4 blends, not linear fades) | 15 |
 | Macro overlay + sun exposure (no wallpaper look, visible light direction) | 15 |
-| Technical correctness (HLSL smoothstep, URP Lit keywords, importer settings, world-space noise) | 15 |
+| Technical correctness (HLSL smoothstep, URP Lit keywords, importer settings, FlowMap feature transform, world-space noise) | 15 |
 
 ---
 
