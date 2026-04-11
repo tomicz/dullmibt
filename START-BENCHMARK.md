@@ -953,88 +953,6 @@ IMPORTANT RULES:
 
 ---
 
-# Layer 7 — Horizon Closure (Mountain Ring)
-
-## Critical Rule
-
-**Do NOT modify terrain, water, props, lighting, or clouds.** This layer only ADDS mountain ring meshes outside the playable terrain.
-
-## Prerequisites
-
-- Layer 1 (terrain) must be completed. `ProceduralMeshGround` must exist.
-
----
-
-## Layer 7 Prompt
-
-```text
-Generate a procedural mountain ring around the edges of the existing terrain to close the horizon.
-The ring hides the void beyond the map edges. Do NOT modify any previous layer output.
-
-IMPORTANT RULES:
-- transform.localScale is ALWAYS (1, 1, 1) for the ring parent.
-- Ring sits OUTSIDE terrain bounds (does not overlap playable area).
-- Mountains must blend visually with terrain edges.
-- Ring must be continuous — no gaps.
-
-1. READ TERRAIN DATA
-   - Find "ProceduralMeshGround" — get mesh bounds.
-   - Compute terrain world bounds: minX, maxX, minZ, maxZ.
-   - Get terrain height at edges and terrain max height.
-
-2. RING GEOMETRY
-   Ring dimensions:
-   - Inner edge: overlaps 20m INTO terrain bounds for seamless blending.
-   - Outer edge: 150-250m beyond terrain bounds.
-   - Build as single continuous mesh, 300-400 perimeter sample points, 25-30 radial steps.
-
-   Per radial strip:
-   - Inner vertices: height = terrain height at that XZ (seamless weld).
-   - Height by distance from edge:
-     3 octaves, k=[0.008, 0.02, 0.06], a=[40, 15, 5].
-     Height multiplier = smoothstep(0, ringWidth, distFromEdge).
-     Peak height: 60-120% of terrain max height.
-   - Outermost row: Y = -20 (hides bottom edge).
-
-3. RING MATERIAL
-   - Use the SAME Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat from terrain.
-   - Map UVs to terrain UV space for seamless texture extension.
-   - Call RecalculateTangents().
-
-4. RING FOREST
-   - Add temporary MeshCollider to ring mesh for raycasting.
-   - Scatter trees in band from 15m inside terrain edge to 100m outside.
-   - Noise-based density (k=0.015, threshold 0.35). Cell size: 8m.
-   - Target: 1500-2500 ring trees for 500x500 map.
-   - Smaller trees (4-6.5m trunk height) — distance trees.
-   - Skip: height < 0, height > 80% of max, slope > 0.45.
-   - Use same TreeBark.mat and TreeLeaves.mat. Add under existing "Trees" parent.
-   - Remove temporary MeshCollider when done.
-
-5. HIERARCHY
-   HorizonRing (root, position 0,0,0, scale 1,1,1)
-   └── Ring_Full (single continuous mesh)
-
-6. REPORT
-   Return: vertex count, ring tree count, ring width, height range of ring mountains,
-   material used, confirm seamless blend, confirm no previous layers modified.
-```
-
----
-
-## Layer 7 Scoring Rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| Geometry Quality (continuous ring, mountain shapes, height variation, corner coverage, outer edge) | 35 |
-| Blending Quality (height match at seam, no overlap artifacts, visual consistency) | 30 |
-| Technical Quality (layer isolation, hierarchy, performance, scale) | 20 |
-| Visual Quality (reads as mountains, atmospheric blending) | 15 |
-
----
-
----
-
 ## Overall Scoring Guide
 
 | Layer | Max Score |
@@ -1045,8 +963,7 @@ IMPORTANT RULES:
 | Layer 4 — Props | 100 |
 | Layer 5 — Lighting | 100 |
 | Layer 6 — Sky & Clouds | 100 |
-| Layer 7 — Horizon | 100 |
-| **Total** | **700** |
+| **Total** | **600** |
 
 | Score | Meaning |
 |-------|---------|
