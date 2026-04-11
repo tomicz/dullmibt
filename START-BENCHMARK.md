@@ -630,135 +630,150 @@ Exclusion zones are consumed by Layer 4 to keep props away from water. Current s
 
 ---
 
-# Layer 4 — Props (Trees & Rocks)
+# Layer 4 — Pine Forest (Poisson-Disk Clumping with Forest Mask)
 
 ## Critical Rule
 
-**Do NOT modify terrain mesh, terrain textures, water surfaces, or any previous layer output.** All props placed ON TOP via raycasting.
+**Do NOT modify terrain mesh, terrain textures, water surfaces, or any previous layer output.** All props placed ON TOP via position sampling from the terrain mesh.
 
 ## Prerequisites
 
-- `ProceduralMeshGround` with MeshCollider.
-- `WaterExclusionZones` from Layer 3.
-- `RiverPath` from Layer 1.
+- `ProceduralMeshGround` with valid mesh and normals.
+- `FlowMap.exr` from Layer 1 (for water exclusion via river mask distance transform).
+- Layer 2 composites and Layer 3 water complete.
 
----
+## Scope
 
-## Layer 4 Prompt
+Layer 4 generates **pine trees only**. Earlier versions of this spec included oaks, bushes, rocks and understory, but practical testing revealed:
 
-```text
-Generate all props (trees, rocks) on the existing ProceduralMeshGround.
-Each prop is a unique procedural mesh. Do NOT modify terrain, water, or any previous layer output.
+- **Bushes** generated from small stems + overlapping ellipsoids look terrible up-close (dark blobs with visible trunk stubs). They either need dedicated asset-quality meshes or they should be skipped.
+- **Oaks** with fat-trunk + canopy-ellipsoid look OK but visually compete with pines rather than adding realism. A single-species forest reads as more consistent.
+- **Rocks and understory** are deferred as future work — the current stack (terrain + water + pine forest) is self-contained and visually coherent.
 
-IMPORTANT RULES:
-- transform.localScale is ALWAYS (1, 1, 1) for all objects.
-- Every prop uses a UNIQUE seed (baseSeed + propIndex).
-- Raycast DOWN from above to find ground position.
-- Respect WaterExclusionZones.
-- No props on steep slopes (slope > 0.5) or mountain peaks (height > 85% of max).
+If you want multiple species, plan separate material+mesh asset pairs per species and keep species distinct in the hierarchy for culling/LOD.
 
-1. READ TERRAIN AND EXCLUSION DATA
-   - Find "ProceduralMeshGround" — get mesh bounds.
-   - Find "WaterExclusionZones" — parse river halfwidth, margin, lake/pond data.
-   - Find "RiverPath" — reconstruct river polyline.
-   - Compute terrain height range.
+## Approach
 
-2. PLACEMENT RULES
-   Height zones (normalized height 0-1):
-   - hN < 0.05: no trees
-   - hN 0.05-0.60: full density
-   - hN 0.60-0.75: reduced density (50%)
-   - hN > 0.75: no trees
+**Poisson-disk sampling with a sharply-contrasted forest mask.** Uniform jittered grids produce a visible regular pattern; standard Poisson-disk alone gives even distribution. What makes the forest read as real is **clumping**: dense cores, sparse edges, bare clearings.
 
-   Slope rules:
-   - slope < 0.35: full density
-   - slope 0.35-0.50: reduced density (50%)
-   - slope > 0.50: no trees
+### Forest mask
 
-   Water exclusion: no trees within riverHalfWidth + exclusionMargin or lakeRadius + exclusionMargin.
-   Minimum spacing between trees: 4-8m.
+A 3-octave FBM sharpened via smoothstep gives clear forest/clearing boundaries:
 
-3. DENSITY AND DISTRIBUTION
-   Target: 1 tree per 10x10m cell. ~400-600 trees for a 500x500 map.
-   Grid-based with jitter (+-40% of cell size).
-   Density noise (k=0.01): noise > 0.4 place, noise < 0.4 skip (natural clearings).
-
-4. TREE GENERATION (per tree)
-   Unique seed: baseSeed(12345) + treeIndex.
-   Use recursive branching algorithm:
-
-   PARAMETERS (randomize +-20% per tree, 1 unit = 1 meter):
-   - Trunk height: 5-8m, base radius: 0.25-0.45m, top radius: 0.04-0.08m
-   - Recursion depth: 4-5, main branches from trunk: 4-6
-   - Branch start height: 35-50% up trunk
-   - Child branch length = parent * 0.55-0.75
-   - Child branch radius = parent end * 0.45-0.65
-   - Branch angle: 22-45 degrees
-   - Taper exponent: 1.3 (exponential)
-   - Gravity droop: depth * 0.06
-   - Random perturbation: +-0.08 on direction vector
-
-   TRUNK AND BRANCH MESH:
-   - Each segment: tapered cylinder with 6 radial segments
-   - Trunk: 8-10 length segments, main branches: 4-5, sub-branches: 2-3
-   - Vertex colors: bark brown RGB(0.22, 0.13, 0.06) * random(0.8, 1.2)
-
-   LEAF CLUSTERS (cross-billboard):
-   - Each cluster = 3 intersecting quads at 0, 60, 120 degree rotations
-   - Quad size: 1.0-2.0m
-   - Place at branch endpoints and along branches (50% point)
-   - Depth 3+ branches get leaf clusters
-   - Vertex colors: RGB(0.08, 0.25, 0.03) * random(0.6, 1.0)
-   - Double-sided rendering.
-
-   MATERIALS (create ONCE, reuse across all trees):
-   - Assets/BenchmarkRuns/{run-id}/Materials/TreeBark.mat
-     Shader: Universal Render Pipeline/Baked Lit
-     _BaseColor: (0.32, 0.20, 0.10, 1.0), _Cull: 2
-   - Assets/BenchmarkRuns/{run-id}/Materials/TreeLeaves.mat
-     Shader: Universal Render Pipeline/Baked Lit
-     _BaseColor: (0.15, 0.35, 0.08, 1.0), _Cull: 0, _AlphaClip: 1
-
-   HIERARCHY per tree:
-   Tree_N (empty parent, localScale=1,1,1)
-   ├── Trunk (MeshFilter + MeshRenderer, TreeBark.mat)
-   └── Leaves (MeshFilter + MeshRenderer, TreeLeaves.mat)
-
-5. ROCK GENERATION
-   Place in rocky zones: slope > 0.25 OR height > 60% of max.
-   Also scatter in plains and near river banks.
-   Target: 200-400 rocks for 500x500. Cell size: 8m with jitter.
-
-   ROCK SHAPES: mostly spheres and some cubes, flatten Y scale for grounded silhouettes.
-   Vary size: 0.3-2m radius. Random yaw and slight tilt.
-   After raycast, embed rock into ground by ~12-26% of its world-space height.
-   Water exclusion margin: 50% of tree margin (rocks can be near shoreline).
-
-   MATERIAL: Assets/BenchmarkRuns/{run-id}/Materials/RockGray.mat
-   Shader: Universal Render Pipeline/Baked Lit, low smoothness, neutral gray.
-
-6. HIERARCHY
-   Props (root)
-   ├── Trees
-   │   └── Tree_N → Trunk + Leaves
-   └── Rocks
-       └── Rock_N
-
-7. REPORT
-   Return: trees placed, rocks placed, total vertex count, seed range,
-   confirm terrain NOT modified, confirm water NOT modified.
+```
+n1 = PerlinNoise(wx * 0.005, wz * 0.005)        // 200m patches
+n2 = PerlinNoise(wx * 0.012, wz * 0.012) * 0.5  // 80m variation
+n3 = PerlinNoise(wx * 0.03,  wz * 0.03)  * 0.25 // 30m fine noise
+raw = (n1 + n2 + n3) / (1 + 0.5 + 0.25)
+forestMask = smoothstep(0.35, 0.60, raw)        // 0 = clearing, 1 = dense forest
 ```
 
----
+The smoothstep remap is what creates **hard** forest boundaries instead of a gentle density gradient. Tuning `(0.35, 0.60)` controls how much of the map is forest vs clearing. Wider gap = softer edges, tighter = more abrupt.
 
-## Layer 4 Scoring Rubric (100 points)
+### Variable Poisson radius
+
+```
+r(wx, wz) = lerp(10m, 3m, forestMask(wx, wz))
+```
+
+Dense cores get 3m spacing (very tight), edges and transition zones get 10m. Points outside the forest mask (`forestMask < 0.05`) are rejected entirely.
+
+### Bridson's algorithm with multi-seeding
+
+Standard Bridson's starts from one seed and expands. With a disconnected forest mask (multiple islands), a single seed only fills the island it started in. Fix: **seed 30 random valid points spaced ≥ 8m apart** before running the main loop. This guarantees all islands get populated.
+
+Main loop: k = 30 candidate tries per active point, annulus `[r, 2r]`. Neighbor check over a 7×7 grid window (3 cells around to catch neighbors within max possible radius). Accept if no existing point is within the **max of the two radii** (variable-r Poisson rule).
+
+### Placement filter
+
+Reject candidates where any of:
+- `height < -2m` (underwater/mud zones)
+- `height > 55m` (snow line)
+- `slope > 0.45` (too steep)
+- `distToRiver < 4m` (water exclusion)
+- `forestMask < 0.05` (clearing)
+
+## Per-tree attributes
+
+- **Power-law scale**: `scale = 0.75 + pow(rand01, 2.5) * 0.9` → range 0.75–1.65, distribution biased toward small (many saplings, few giants)
+- **Orientation slerp**: `upTree = slerp(worldUp, terrainNormal, 0.2)` → 20% tilt toward terrain slope, keeps trees visibly vertical but with subtle lean
+- **Random yaw** `[0, 360°]`
+- **Sink** `-0.2m to -0.35m` random so trunk bases don't float on raycast imprecision
+
+## Pine mesh
+
+Two sub-meshes (one per material), reused across all 5000+ instances via GPU instancing:
+
+### Trunk (`PineBark.asset`)
+
+- Single 8-radial tapered cylinder
+- Base radius 0.22m, top radius 0.08m, height 6m
+- Bottom + top fan caps
+
+### Foliage (`PineLeaves.asset`)
+
+Three stacked cones for a layered pine silhouette:
+
+| Cone | Y start | Base radius | Top radius | Height |
+|------|---------|-------------|------------|--------|
+| 1 (bottom) | 2.4m | 1.6m | 0.3m | 1.8m |
+| 2 (middle) | 3.8m | 1.25m | 0.2m | 1.8m |
+| 3 (top)    | 5.2m | 0.85m | 0.0m | 1.8m |
+
+Each cone uses `addCyl` with 8 radial segments. Cones share no vertices (cleaner shading via `RecalculateNormals`).
+
+## Materials
+
+Two URP/Lit materials, **`enableInstancing = true`** on both (mandatory for rendering 5k+ trees):
+
+| Material | Base color | Smoothness | Metallic |
+|----------|-----------|------------|----------|
+| `TreeBarkPine.mat` | (0.22, 0.14, 0.08) | 0.08 | 0 |
+| `TreeLeafPine.mat` | (0.08, 0.20, 0.08) | 0.12 | 0 |
+
+## Hierarchy
+
+```
+Props/
+  Trees/
+    Tree_N (transform: pos + rot + scale)
+      Trunk  (MeshFilter=PineBark,   MeshRenderer=TreeBarkPine)
+      Leaves (MeshFilter=PineLeaves, MeshRenderer=TreeLeafPine)
+```
+
+5000+ Tree_N GameObjects, all sharing 2 meshes and 2 materials. URP batches them via GPU instancing — the renderer only issues ~2 draw calls per frame for the entire forest.
+
+## Expected output
+
+For a 500×500m map with seed 98765:
+- ~5000 pine trees (exact count varies with FBM realisation)
+- Grid 237×237 cells, ~10k Bridson iterations
+- Forest coverage ~25–35% of map area
+- Dense cores at 3m spacing, sparse edges at 10m
+- Multiple disconnected forest islands all populated
+
+## Common pitfalls
+
+- **Uniform grid-with-jitter instead of Poisson-disk** → visible lattice in the canopy.
+- **No forest mask** → uniform density looks like a tree farm.
+- **Soft forest mask (no smoothstep sharpening)** → no clear forest boundaries, no clearings.
+- **Single Bridson seed** → only one island gets populated if the mask has multiple.
+- **Uniform scale ±20%** → canopy looks flat and unreal. Use power-law distribution.
+- **Zero orientation slerp (all trees vertical)** → trees on slopes look like they're on stilts.
+- **Full slerp (all trees perpendicular to slope)** → trees on steep hillsides visibly tilt sideways, unreal.
+- **`enableInstancing = false`** → 5k trees = 10k draw calls = frame rate collapse.
+- **Tiny bush/small prop meshes without real assets** → low-poly blobs look terrible up close. Don't ship them without real authored meshes.
+
+## Scoring rubric (100 points)
 
 | Category | Points |
 |----------|--------|
-| Placement Quality (height zones, water exclusion, slope, distribution, spacing, grounding) | 40 |
-| Prop Quality (tree uniqueness, tree structure, rock variety, materials) | 30 |
-| Technical Quality (layer isolation, scale, hierarchy, performance) | 20 |
-| Visual Quality (populated landscape, density, shadows) | 10 |
+| Forest clumping (clear dense cores + bare clearings, not uniform density) | 25 |
+| Placement correctness (no trees on water/peaks/steep slopes/snow) | 20 |
+| Orientation + scale realism (20% slerp, power-law scale, sink) | 15 |
+| Mesh quality (cone-stacked pine silhouette reads as pine, not abstract shape) | 15 |
+| Technical correctness (GPU instancing, shared materials, no scene file bloat, hierarchy) | 15 |
+| Layer isolation (terrain/water/textures untouched) | 10 |
 
 ---
 
