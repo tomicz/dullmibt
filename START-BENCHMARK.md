@@ -975,3 +975,108 @@ IMPORTANT RULES:
 ---
 
 *Benchmark by Darko Tomic. Community: [darkounity.com](https://darkounity.com)*
+
+---
+
+---
+
+## CodeDom / MCP execute_code — Known Failure Patterns
+
+When running this benchmark via Unity MCP (`execute_code`), the compiler backend is **CodeDom (C# 6)**. Several patterns cause silent or noisy failures that invalidate a run. This section documents every failure observed in practice so future agents avoid repeating them.
+
+---
+
+### 1. `using` directives inside the method body
+
+**What fails:**
+```csharp
+using UnityEditor;          // ❌ — not allowed here
+using UnityEngine.Rendering;
+```
+
+**Why:** `execute_code` compiles your code as a *method body*, not a full class file. `using` directives must appear at the top of a file, outside a method. Inside a method body they are a syntax error.
+
+**Fix:** Use fully-qualified names everywhere.
+```csharp
+UnityEditor.AssetDatabase.Refresh();                        // ✅
+UnityEditor.SceneManagement.EditorSceneManager.SaveScene(…);
+UnityEngine.Object.DestroyImmediate(go);
+```
+
+---
+
+### 2. Variable name collision in the same scope
+
+**What fails:**
+```csharp
+float[] bw = brushWeights.ToArray();   // declared earlier
+…
+using (var bw = new System.IO.BinaryWriter(…)) { … }  // ❌ — same name
+```
+
+**Why:** CodeDom compiles all local variables into a single flat scope. A name used earlier in the method cannot be re-declared, even in a nested block like `using`.
+
+**Fix:** Give each variable a distinct name for its entire existence in the method (`bWgt`, `binW`, etc.).
+
+---
+
+### 3. Creating thousands of GameObjects in one `execute_code` call
+
+**What fails:** Generating 5 000+ trees (each with 2 child GameObjects) inside a single call — Unity disconnects and sometimes crashes, returning `{"success":false,"message":null,"data":null}`.
+
+**Why:** The MCP execute_code call has a hard timeout. Allocating ~15 000 GameObjects plus running a Perlin-heavy Bridson loop in the same call exceeds it.
+
+**Fix:** Split into two calls:
+1. **Part 1** — compute positions (algorithm only), write results to a binary file under the run folder.
+2. **Part 2** — read the binary, create GameObjects. If still too many, batch across further calls.
+
+---
+
+### 4. Jagged-array shorthand `{{…}, {…}}` not allowed
+
+**What fails:**
+```csharp
+float[][] data = new float[][] { {1f, 2f}, {3f, 4f} };  // ❌
+int[][]   ranges = new int[][] { {8, 20}, {6, 14} };     // ❌
+```
+
+**Why:** CodeDom C# 6 requires each inner array to have an explicit `new T[]` constructor when initialised inline inside a jagged-array expression.
+
+**Fix:** Declare each inner array as a named variable first:
+```csharp
+float[] row0 = new float[] { 1f, 2f };
+float[] row1 = new float[] { 3f, 4f };
+float[][] data = new float[][] { row0, row1 };  // ✅
+```
+
+---
+
+### 5. `AssetDatabase.DeleteAsset` blocked by default safety checks
+
+**What fails:** Any call to `AssetDatabase.DeleteAsset` returns a blocked-pattern error when `safety_checks` is at its default value of `true`.
+
+**Fix:** Pass `safety_checks: false` on any `execute_code` call that needs to delete or overwrite assets. Always do this for calls that write textures, meshes, or materials (delete-then-recreate is the standard fresh-generation pattern required by the benchmark).
+
+---
+
+### 6. Wrong Unity API assumptions
+
+Three specific API mistakes caused compilation errors:
+
+| Mistake | Correct form |
+|---------|-------------|
+| `Object.FindObjectsOfType<T>()` — `Object` is ambiguous between `System.Object` (`object`) and `UnityEngine.Object` | `UnityEngine.Object.FindObjectsOfType<T>()` |
+| `sunLight.shadowDistance = 300f` — `shadowDistance` is not a property of `UnityEngine.Light` | `QualitySettings.shadowDistance = 300f` |
+| `profile.Add<ScreenSpaceAmbientOcclusion>()` — type cannot be resolved as `VolumeComponent` in CodeDom context | Wrap in `try { } catch (Exception) { }` or omit SSAO entirely; it is optional in the Layer 5 spec |
+
+---
+
+### Summary checklist for every `execute_code` call
+
+- [ ] No `using` directives — use fully-qualified names
+- [ ] No duplicate variable names anywhere in the method, even in nested blocks
+- [ ] No single call that both runs a heavy algorithm **and** creates thousands of GameObjects — split the calls
+- [ ] Jagged arrays always use `new T[] { … }` for each inner row
+- [ ] Add `safety_checks: false` whenever the call uses `AssetDatabase.DeleteAsset` or `File.Delete`
+- [ ] Always write `UnityEngine.Object.DestroyImmediate`, not `Object.DestroyImmediate`
+- [ ] Shadow distance → `QualitySettings.shadowDistance`, not `Light.shadowDistance`
