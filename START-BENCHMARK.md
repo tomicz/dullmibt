@@ -512,86 +512,119 @@ On `Ground.mat` (URP Lit):
 
 ---
 
-# Layer 3 — Water System
+# Layer 3 — Mask-Based River Water System
 
 ## Critical Rule
 
-**The water layer must NEVER modify terrain vertices, normals, UVs, or any terrain textures.** Water surfaces sit on the terrain — they do not carve or reshape it.
+**Terrain is READ-ONLY.** Water surfaces sit on the terrain — they do not carve, reshape, or recolor it. Do not touch `ProceduralMeshGround` vertices, normals, UVs, collider, or any Layer 2 textures.
 
 ## Prerequisites
 
-- `ProceduralMeshGround` must exist with valid mesh, UVs, and MeshCollider.
-- `RiverPath` must exist (from Layer 1).
+- `ProceduralMeshGround` must exist with valid mesh and MeshCollider.
+- `FlowMap.exr` from Layer 1 must be readable and contain: G = river mask, B = carve depth (meters), A = width radius (cells).
+- `Ground.mat` and Layer 2 composites must be finalised (water is the last terrain-surface layer).
 
----
+## Approach
 
-## Layer 3 Prompt
+Walking the `RiverPath` polyline and generating a quad-strip **does not work** — `RiverPath` contains only the primary river's ~36 waypoints, the strip is a straight-line approximation that clips into the actual meandering carved channel, and tributaries have no water. An earlier version of this spec did exactly that; do not return to it.
 
-```text
-Generate water surfaces on the existing ProceduralMeshGround in the active Unity scene.
-This adds visible water meshes that sit ON TOP of the terrain. Do NOT modify the terrain mesh.
+Instead, **build the water mesh directly from the `FlowMap.exr` river mask**. One quad per masked cell, dedupe shared vertices. The mesh topology exactly matches the carved channel topology, including every branch.
 
-IMPORTANT RULES:
-- DO NOT modify ProceduralMeshGround vertices, normals, UVs, or collider. Terrain is READ-ONLY.
-- DO NOT rebake any terrain textures. They are final.
-- transform.localScale is ALWAYS (1, 1, 1) for all water objects.
+## Bake algorithm
 
-1. READ TERRAIN AND RIVER DATA
-   - Find "ProceduralMeshGround" — get MeshFilter mesh bounds.
-   - Find "RiverPath" — reconstruct the river polyline from child transforms.
-   - Build a dense polyline using Catmull-Rom interpolation (200+ segments).
+```
+1. Load FlowMap.exr
+   - mask[c] = (fPix[c].g > 0.5)
+   - carveDepth[c] = fPix[c].b (meters)
 
-2. GENERATE RIVER WATER SURFACE (mandatory)
-   - Walk the RiverPath polyline. At each sample point:
-     - Raycast DOWN to find terrain surface height at river center.
-     - Water surface Y = terrainHeight + 0.3.
-     - River half-width = 14-18 (match the carved channel).
-   - Build a continuous quad-strip mesh along the entire path.
-   - Smooth the water Y values (3-5 passes of neighbor averaging).
-   - Mesh MUST extend beyond terrain bounds at both ends.
-   - Create GameObject "RiverWater" under parent "Water".
+2. For each masked cell, compute "original pre-carve surface":
+     origSurf[c] = carvedTerrainY(cellCenter) + carveDepth[c]
+   carvedTerrainY is bilinear-sampled from the current ground mesh.
 
-3. WATER MATERIAL
-   - Path: Assets/BenchmarkRuns/{run-id}/Materials/Water.mat
-   - URP Lit, Surface Type = Transparent
-   - Base Color = (0.12, 0.28, 0.40, 0.80)
-   - Smoothness = 0.95, Metallic = 0.1
-   - ZWrite = 0, SrcBlend = SrcAlpha, DstBlend = OneMinusSrcAlpha
+3. Water level H[c] = (max of origSurf over cells within radius 10, masked only) - sinkBelowBank
+   Using the MAX over a neighborhood gives the bank-top envelope: water rises to fill the channel
+   almost to the top of the bank. Radius 10 cells is enough for typical river widths.
+   sinkBelowBank ≈ 1.0m controls how much bank is visible above water — tune by shifting the
+   final vertex Ys uniformly.
 
-4. OPTIONAL: LAKES (only for maps > 500x500 with suitable terrain)
-   - Scan for flat low areas (avgHeight < 20% of height range, slope < 0.15).
-   - Lake = flat circular water surface at terrain minimum + 0.3.
-   - Use fan mesh with 32-48 edge vertices.
-   - Create as "Lake_N" under "Water" parent.
+4. 5 passes of 3x3 box blur on H, masked cells only. Flattens cross-section and longitudinal
+   ripples so water reads as a fluid surface, not a bumpy copy of the carved bed.
 
-5. OPTIONAL: PONDS (bonus for large maps)
-   - Only if map > 500x500, radius 8-18.
-   - Create as "Pond_N" under "Water" parent.
+5. Clamp: H[c] >= carvedTerrainY(cellCenter) + 0.1m (ensures at least 10cm of water depth).
 
-6. EXCLUSION ZONE DATA
-   - Create "WaterExclusionZones" under "Water" parent.
-   - For each water body, add a child GameObject with naming:
-     "River_Exclusion_margin5_halfwidth16"
-     "Lake_0_r35_margin8"
-     "Pond_0_r12_margin6"
+6. Build mesh with vertex dedup:
+   - For each masked cell emit 2 triangles on the 4 corner vertices
+   - Dedup via Dictionary<int, int> keyed on (vz * (DW+1) + vx)
+   - Vertex Y is the average of H[c] over the up-to-4 adjacent masked cells
+   - Edge vertex inset: if not all 4 adjacent cells are masked, shift the vertex toward the centroid
+     of the masked adjacent cells by ~0.15 cells. This tucks the water lip under the bank and softens
+     the pixelated step outline.
+   - mesh.indexFormat = UInt32 (5000+ cells can exceed 65k verts after dedupe edge cases)
 
-7. ENVIRONMENT
-   - Fog MUST remain disabled (RenderSettings.fog = false).
-
-8. REPORT
-   Return: river length/width/vertex count, lakes count, ponds count, material path,
-   exclusion zones stored, confirm terrain was NOT modified.
+7. Save mesh as Assets/BenchmarkRuns/{run-id}/Meshes/RiverWaterMesh.asset
 ```
 
----
+### Tuning knobs
 
-## Layer 3 Scoring Rubric (100 points)
+| Knob | Default | Effect |
+|------|---------|--------|
+| `bankRadius` (cells) | 10 | Larger = pulls water up to higher surrounding ground (wider search for bank top) |
+| `sinkBelowBank` (m) | 1.0 | Larger = more bank visible above water, water sits deeper in channel |
+| Min water depth (m) | 0.1 | Safety — prevents water from clipping carved bed |
+| Blur passes | 5 | More = flatter water, fewer = water follows carve bumps |
+| Edge inset (cells) | 0.15 | Larger = water edge pulls further from bank, softens sawtooth more |
+
+## Water material
+
+Path: `Assets/BenchmarkRuns/{run-id}/Materials/Water.mat`
+
+- Shader: `Universal Render Pipeline/Lit` (fallback Standard)
+- Surface type: **Transparent** (`_Surface = 1`)
+- Blend mode: **Alpha** (`_Blend = 0`)
+- Base Color: `(0.15, 0.35, 0.45, 0.30)` — **desaturated teal, not pure blue**. Pure blue reads as plastic.
+- Alpha: 0.30–0.45 depending on desired transparency
+- Smoothness: **0.95**. Below 0.9 reads as wet paint.
+- Metallic: **0.0**. Water is dielectric; any metallic kills Fresnel.
+- `_SrcBlend = SrcAlpha`, `_DstBlend = OneMinusSrcAlpha`, `_ZWrite = 0`
+- `renderQueue = 3000` (Transparent)
+- Keywords: `_SURFACE_TYPE_TRANSPARENT` enabled; `_ALPHATEST_ON`, `_ALPHABLEND_ON`, `_ALPHAPREMULTIPLY_ON`, `_SPECULAR_SETUP` disabled
+- `_SpecularHighlights = 1`, `_EnvironmentReflections = 1` — this is where the "water look" comes from without a custom shader (sky reflection via reflection probe)
+
+**Do not enable `_SPECULAR_SETUP`** — it switches URP Lit to the specular workflow and breaks metallic/smoothness reflections.
+
+## Hierarchy
+
+```
+Water/
+  RiverWater (MeshFilter + MeshRenderer, shadows off, receive shadows off)
+  WaterExclusionZones/
+    River_Exclusion_margin5_halfwidth{int}
+```
+
+Exclusion zones are consumed by Layer 4 to keep props away from water. Current spec only records the river; lakes/ponds are noted as optional for future expansion.
+
+## Environment
+
+`RenderSettings.fog = false`.
+
+## Common pitfalls
+
+- **Water pixelated on edges** — use the edge-vertex inset trick. Larger inset (0.3–0.4 cells) softens more but if too large the water visibly pulls away from the bank.
+- **Water follows the bed (wavy surface)** — smoothing isn't aggressive enough OR you're using a min-pull instead of the max-over-radius envelope. Switch to max-of-origSurf.
+- **Water buried below terrain** — you used `terrainY + lift` instead of the `origSurf - sinkBelowBank` formula. The carved bed is low; water sitting just above the bed is mostly hidden behind the banks.
+- **Water spilling over banks** — `sinkBelowBank` too small OR `bankRadius` too large (reaching further uphill to higher "bank" candidates). Try reducing bankRadius to 8.
+- **Looks like plastic, not water** — alpha too high (≥0.8) OR smoothness too low (<0.9) OR metallic > 0 OR pure-blue base color OR `_SPECULAR_SETUP` accidentally enabled.
+- **Catmull-Rom polyline approach** — do not. See "Approach" section.
+
+## Scoring rubric (100 points)
 
 | Category | Points |
 |----------|--------|
-| River Quality (follows channel, elevation, extends off map, width, smooth flow, visual) | 50 |
-| Optional Water Bodies (lake/pond placement, shape, count scaling) | 20 |
-| Technical Quality (terrain untouched, scale, material, hierarchy, exclusion data, performance) | 30 |
+| River coverage (all river systems including tributaries, not just primary) | 25 |
+| Water surface flatness (flat cross-section, no bed ripples) | 20 |
+| Channel fill level (water near bank top, banks hide edges, no mud bank strip visible between water and terrain) | 20 |
+| Material realism (transparent, reflective, desaturated teal, specular highlights) | 15 |
+| Technical correctness (terrain untouched, UInt32 index, importer settings, URP Lit transparent flags, exclusion hierarchy) | 20 |
 
 ---
 
