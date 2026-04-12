@@ -1,4 +1,4 @@
-# Darko Unity LLM Intelligence Benchmark — Full Prompt
+# One Shot Prompt — World Generation in Unity
 
 **Two ways to start:**
 - **Repo access:** Point your agent at this file. It has everything.
@@ -8,15 +8,13 @@
 
 ## Learn Unity with others
 
-If you are running this benchmark, you are exactly the kind of builder who benefits from structured learning and peer feedback.
-
-Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learning community. A place to **learn Unity** with guidance, share progress, and connect with people who care about shipping real projects. Whether you pass or fail this benchmark, come learn Unity there: fundamentals, URP, tooling, and project discipline compound faster when you are not alone.
+Visit **[darkounity.com](https://darkounity.com)** — the **Dark Unity** learning community. A place to **learn Unity** with guidance, share progress, and connect with people who care about shipping real projects. Come learn Unity there: fundamentals, URP, tooling, and project discipline compound faster when you are not alone.
 
 ---
 
 ## Before you begin
 
-The benchmark auto-generates a run ID based on the agent name + today's date, so you don't have to pick one manually. You CAN override it by specifying a custom ID in the prompt below if you want.
+The agent auto-generates a run ID based on its name + today's date, so you don't have to pick one manually. You CAN override it by specifying a custom ID in the prompt below if you want.
 
 ---
 
@@ -25,15 +23,15 @@ The benchmark auto-generates a run ID based on the agent name + today's date, so
 Paste this block to your agent first:
 
 ```
-You are a Unity Editor agent. You will build a complete procedural 3D landscape in Unity by executing all 7 layers below in order, without stopping between layers.
+You are a Unity Editor agent. You will build a complete procedural 3D landscape in Unity by executing all 6 layers below in order, without stopping between layers.
 
 Run ID: [leave blank to auto-generate, OR specify a custom ID like "my-test-run"]
 
 STEP 1 — EXECUTION MODE DETECTION (do this first, before anything else):
 Check your available tools for Unity MCP. Look for any tool that lets you execute C# code inside the Unity Editor at runtime — typically named "execute_code", "unity_execute", "mcp__unity__execute_code", or similar, provided by a Unity MCP server.
 
-- If Unity MCP IS available: YOU MUST use it. Execute every layer by calling the MCP execute_code tool with inline C#. Do NOT write .cs files to the project. Do NOT create an Editor runner script. Do NOT use AssetDatabase imports of your own scripts. This is non-negotiable when MCP is present — the benchmark is explicitly designed to test runtime editor manipulation via MCP, not traditional scripting workflows. Writing script files when MCP is available is a failure mode and invalidates the run.
-- If Unity MCP is NOT available: fall back to writing C# Editor scripts under Assets/BenchmarkRuns/{run-id}/Editor/ that the user will run manually via [MenuItem] entries. State clearly at the start that you are in script-fallback mode because no MCP tool was found.
+- If Unity MCP IS available: YOU MUST use it. Execute every layer by calling the MCP execute_code tool with inline C#. Do NOT write .cs files to the project. Do NOT create an Editor runner script. Do NOT use AssetDatabase imports of your own scripts. This is non-negotiable when MCP is present — the prompt is designed around runtime editor manipulation via MCP for the best workflow. Writing script files when MCP is available defeats the purpose.
+- If Unity MCP is NOT available: fall back to writing C# Editor scripts under Assets/WorldGenRuns/{run-id}/Editor/ that the user will run manually via [MenuItem] entries. State clearly at the start that you are in script-fallback mode because no MCP tool was found.
 
 Announce your detected execution mode (MCP or script-fallback).
 
@@ -52,12 +50,12 @@ This step is critical. If MCP is available, the VERY FIRST execute_code call you
             4) "unknown-agent" as a last resort
           Use hyphens, no spaces. Do not guess versions you don't actually know.
         - YYYY-MM-DD: get from C# System.DateTime.Now.ToString("yyyy-MM-dd").
-      - Collision handling: if Assets/BenchmarkRuns/{run-id}/ already exists, append
+      - Collision handling: if Assets/WorldGenRuns/{run-id}/ already exists, append
         "-HHmm" from System.DateTime.Now to make it unique.
       - Announce the final run ID to the user.
 
    b) Create the run folder BEFORE creating the scene:
-      - Use AssetDatabase.CreateFolder recursively to ensure Assets/BenchmarkRuns/{run-id}/ exists.
+      - Use AssetDatabase.CreateFolder recursively to ensure Assets/WorldGenRuns/{run-id}/ exists.
       - Call AssetDatabase.Refresh() after creating folders.
 
    c) Create a brand new empty scene AND open it as the active scene:
@@ -66,12 +64,12 @@ This step is critical. If MCP is available, the VERY FIRST execute_code call you
       - Verify: EditorSceneManager.GetActiveScene() should return the new scene.
 
    d) Immediately save the new scene to disk at the run folder path:
-      EditorSceneManager.SaveScene(newScene, "Assets/BenchmarkRuns/{run-id}/run-scene.unity");
+      EditorSceneManager.SaveScene(newScene, "Assets/WorldGenRuns/{run-id}/run-scene.unity");
       - This makes the scene persistent and tied to the run folder.
       - After saving, verify the file exists at that path before continuing.
 
    e) Verify the active scene is now the run scene:
-      EditorSceneManager.GetActiveScene().path must equal "Assets/BenchmarkRuns/{run-id}/run-scene.unity".
+      EditorSceneManager.GetActiveScene().path must equal "Assets/WorldGenRuns/{run-id}/run-scene.unity".
       If it does not, STOP and report the failure. Do not proceed to Layer 1.
 
    f) HARD RULE: do NOT work in, modify, or reset any pre-existing scene. Always create fresh. If the previous active scene had unsaved changes, discard them (NewSceneMode.Single handles this — do not prompt).
@@ -80,8 +78,8 @@ Only after scene setup is complete and verified, proceed to Layer 1.
 
 Global rules (apply to every layer after scene setup):
 0) Before starting Layer 1, confirm scene setup (Step 2 above) completed successfully and the active scene is the run scene.
-1) Execute all 7 layers in order. Do not stop between layers unless an error requires human input.
-2) ALL assets (textures, materials, settings) must be saved under Assets/BenchmarkRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
+1) Execute all 6 layers in order. Do not stop between layers unless an error requires human input.
+2) ALL assets (textures, materials, settings) must be saved under Assets/WorldGenRuns/{run-id}/. Never write to Assets/Materials/, Assets/Textures/, or any path outside the run folder.
 3) After each layer, verify: hierarchy names exist, MeshCollider on terrain, read console for errors. Save the scene (EditorSceneManager.SaveScene). Report layer completion before proceeding.
 4) Scale is ALWAYS (1,1,1) for every GameObject. Map size controlled by localSizeX/Z. Noise uses world-space coordinates directly.
 5) Each layer only ADDS to the scene. Never modify previous layers' terrain mesh, textures, water, props, or lighting.
@@ -90,7 +88,7 @@ Global rules (apply to every layer after scene setup):
 8) Props placed via downward raycast to ProceduralMeshGround only. No floating objects.
 9) Output a per-layer summary (counts, key asset paths, material slots assigned) before starting the next layer.
 
-The 7 layers follow. Execute them in order.
+The 6 layers follow. Execute them in order.
 ```
 
 ---
@@ -118,7 +116,7 @@ Layer 1 is **only** the bare terrain mesh, the river network carved into it, and
 
 ## Random Seed Rule
 
-**Layer 1 must use a fresh random seed on every run.** This is intentional: the benchmark exists to evaluate models against terrains they have never seen. A fixed seed lets a model overfit one map.
+**Layer 1 must use a fresh random seed on every run.** This ensures every run generates a unique terrain.
 
 - Seed source: `unchecked((int)System.DateTime.Now.Ticks)`.
 - The actual integer used MUST be written into `terrain.json` so any run can be replayed for debugging.
@@ -232,17 +230,17 @@ Requirements:
     - mesh.vertices = ..., mesh.triangles = ..., mesh.uv = ...
     - RecalculateNormals(), RecalculateTangents(), RecalculateBounds().
     - Save the mesh as an asset:
-        Assets/BenchmarkRuns/{run-id}/Meshes/GroundMesh.asset
+        Assets/WorldGenRuns/{run-id}/Meshes/GroundMesh.asset
     - Assign to MeshFilter.sharedMesh and MeshCollider.sharedMesh.
 
 11. PLACEHOLDER GROUND MATERIAL (Layer 2 will overwrite its maps)
-    - Path: Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat
+    - Path: Assets/WorldGenRuns/{run-id}/Materials/Ground.mat
     - Shader: Universal Render Pipeline/Lit (fallback Standard).
     - _BaseColor = (0.55, 0.55, 0.55, 1), Smoothness = 0.10, Metallic = 0.0.
     - No textures assigned. This is intentional — Layer 2 supplies them.
 
 12. DATA SIDE-CHANNEL: HEIGHTMAP EXR
-    - Path: Assets/BenchmarkRuns/{run-id}/Data/Heightmap.exr
+    - Path: Assets/WorldGenRuns/{run-id}/Data/Heightmap.exr
     - Encode in C# from a TextureFormat.RGBAFloat Texture2D using EncodeToEXR().
       Do NOT pass EXRFlags.OutputAsFloat — Unity's EXR importer collapses the asset
       to RGBAHalf on disk anyway, and 16-bit float (~0.05m worst case at 75m) is
@@ -258,7 +256,7 @@ Requirements:
       or downstream layers cannot call GetPixels().
 
 13. DATA SIDE-CHANNEL: FLOWMAP EXR
-    - Path: Assets/BenchmarkRuns/{run-id}/Data/FlowMap.exr
+    - Path: Assets/WorldGenRuns/{run-id}/Data/FlowMap.exr
     - Encode the same way (RGBAFloat source Texture2D → EncodeToEXR(), no
       OutputAsFloat flag). Final on-disk format will be RGBAHalf — that is correct.
     - Channel layout (one cell per pixel, exact same dimensions as the vertex grid):
@@ -270,7 +268,7 @@ Requirements:
       textureCompression None, isReadable TRUE.
 
 14. DATA SIDE-CHANNEL: TERRAIN.JSON
-    - Path: Assets/BenchmarkRuns/{run-id}/Data/terrain.json
+    - Path: Assets/WorldGenRuns/{run-id}/Data/terrain.json
     - Required fields:
         seed                    int    (the actual seed used — for replay)
         localSizeX, localSizeZ  int
@@ -309,41 +307,6 @@ Requirements:
       mesh path, material path, Heightmap.exr path, FlowMap.exr path, terrain.json path,
       RiverPath waypoint count.
 ```
-
----
-
-## Layer 1 Scoring Rubric (100 base points)
-
-### Hydrology Quality (45 points)
-
-| Criterion | Points | Full marks |
-|-----------|--------|------------|
-| **Pit-free DEM** | 8 | Priority-Flood (or equivalent) applied; no interior sinks remain. |
-| **Edge-to-edge rivers** | 12 | At least one continuous river crosses the map from interior to a boundary mouth. |
-| **River count scales with map** | 5 | 1–3 dominant river systems on a 500x500; more on larger maps. |
-| **Variable river width** | 8 | Width grows with sqrt(accumulation); narrowest tributaries clearly thinner than trunk. |
-| **Natural valley cross-section** | 6 | Soft-falloff carve, no cliff walls, banks blend into surrounding terrain. |
-| **Erosion realism** | 6 | Hydraulic erosion droplets clearly shaped ridges/valleys before river extraction. |
-
-### Technical Quality (35 points)
-
-| Criterion | Points | Full marks |
-|-----------|--------|------------|
-| **Random seed per run** | 6 | Seed sourced from DateTime.Now.Ticks; recorded in terrain.json. |
-| **Reproducibility metadata** | 4 | terrain.json contains seed + all parameters needed to replay. |
-| **Heightmap.exr** | 5 | EXR (RGBAHalf on disk), R = raw meters, sRGB off, point filter, clamp, uncompressed, isReadable=true. |
-| **FlowMap.exr** | 6 | EXR (RGBAHalf on disk) with documented R/G/B/A = accNorm/mask/depth/width channels, isReadable=true. |
-| **Mesh + UVs + tangents** | 5 | Correct vertex count, UInt32 index, UVs assigned, tangents recalculated. |
-| **Layer isolation** | 5 | Placeholder Ground.mat is plain gray; no PBR/splat/grass/tinting bled in. |
-| **Performance** | 4 | Full pipeline (FBM + erosion + Priority-Flood + carve) under 15 seconds for 501x501. |
-
-### Visual Quality (20 points)
-
-| Criterion | Points | Full marks |
-|-----------|--------|------------|
-| **Landscape readability** | 8 | Reads as a coherent place: mountains drain into valleys, valleys host rivers. |
-| **River believability** | 8 | Rivers visibly meander, widen downstream, exit the map at logical low points. |
-| **No artifacts** | 4 | No grid banding, no axis-aligned stair-stepping, no orphan pits or floating water. |
 
 ---
 
@@ -475,9 +438,9 @@ Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heigh
 
 ## Output files
 
-- `Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png` (1024², sRGB, albedo composite)
-- `Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png` (1024², linear, normal map)
-- `Assets/BenchmarkRuns/{run-id}/Textures/GroundMaskMap.png` (1024², linear, R=metallic, G=AO, A=smoothness)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundHeightTint.png` (1024², sRGB, albedo composite)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundNormalMap.png` (1024², linear, normal map)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundMaskMap.png` (1024², linear, R=metallic, G=AO, A=smoothness)
 
 **No intermediate tileable texture files** are written. Earlier per-biome `Splat{Grass|Rock|Dirt|Snow}{Albedo|Normal|Mask}.png` files from the old spec should be deleted if present.
 
@@ -496,19 +459,6 @@ On `Ground.mat` (URP Lit):
 - 1024² output ≈ 14M Perlin calls → ~15–25s in CodeDom C#.
 - **2048² output will likely exceed the MCP execute_code timeout**. If you need higher resolution, split the bake across multiple execute_code calls (top half / bottom half) or precompute an intermediate EXR for layer IDs and do a second pass for albedo.
 - Inline the smoothstep, distance, and bilinear helpers — closure invocation overhead is measurable in CodeDom.
-
-## Scoring rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| Layer count and diversity (≥6 layers actively winning different regions) | 20 |
-| Context awareness (river corridors, aspect, curvature visibly affect output) | 20 |
-| River realism (width-aware mud zones, smooth fade-out, no fake bank fringe) | 15 |
-| Heightlerp quality (interlocking transitions, soft k≈0.4 blends, not linear fades) | 15 |
-| Macro overlay + sun exposure (no wallpaper look, visible light direction) | 15 |
-| Technical correctness (HLSL smoothstep, URP Lit keywords, importer settings, FlowMap feature transform, world-space noise) | 15 |
-
----
 
 ---
 
@@ -561,7 +511,7 @@ Instead, **build the water mesh directly from the `FlowMap.exr` river mask**. On
      the pixelated step outline.
    - mesh.indexFormat = UInt32 (5000+ cells can exceed 65k verts after dedupe edge cases)
 
-7. Save mesh as Assets/BenchmarkRuns/{run-id}/Meshes/RiverWaterMesh.asset
+7. Save mesh as Assets/WorldGenRuns/{run-id}/Meshes/RiverWaterMesh.asset
 ```
 
 ### Tuning knobs
@@ -576,7 +526,7 @@ Instead, **build the water mesh directly from the `FlowMap.exr` river mask**. On
 
 ## Water material
 
-Path: `Assets/BenchmarkRuns/{run-id}/Materials/Water.mat`
+Path: `Assets/WorldGenRuns/{run-id}/Materials/Water.mat`
 
 - Shader: `Universal Render Pipeline/Lit` (fallback Standard)
 - Surface type: **Transparent** (`_Surface = 1`)
@@ -615,18 +565,6 @@ Exclusion zones are consumed by Layer 4 to keep props away from water. Current s
 - **Water spilling over banks** — `sinkBelowBank` too small OR `bankRadius` too large (reaching further uphill to higher "bank" candidates). Try reducing bankRadius to 8.
 - **Looks like plastic, not water** — alpha too high (≥0.8) OR smoothness too low (<0.9) OR metallic > 0 OR pure-blue base color OR `_SPECULAR_SETUP` accidentally enabled.
 - **Catmull-Rom polyline approach** — do not. See "Approach" section.
-
-## Scoring rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| River coverage (all river systems including tributaries, not just primary) | 25 |
-| Water surface flatness (flat cross-section, no bed ripples) | 20 |
-| Channel fill level (water near bank top, banks hide edges, no mud bank strip visible between water and terrain) | 20 |
-| Material realism (transparent, reflective, desaturated teal, specular highlights) | 15 |
-| Technical correctness (terrain untouched, UInt32 index, importer settings, URP Lit transparent flags, exclusion hierarchy) | 20 |
-
----
 
 ---
 
@@ -764,19 +702,6 @@ For a 500×500m map with seed 98765:
 - **`enableInstancing = false`** → 5k trees = 10k draw calls = frame rate collapse.
 - **Tiny bush/small prop meshes without real assets** → low-poly blobs look terrible up close. Don't ship them without real authored meshes.
 
-## Scoring rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| Forest clumping (clear dense cores + bare clearings, not uniform density) | 25 |
-| Placement correctness (no trees on water/peaks/steep slopes/snow) | 20 |
-| Orientation + scale realism (20% slerp, power-law scale, sink) | 15 |
-| Mesh quality (cone-stacked pine silhouette reads as pine, not abstract shape) | 15 |
-| Technical correctness (GPU instancing, shared materials, no scene file bloat, hierarchy) | 15 |
-| Layer isolation (terrain/water/textures untouched) | 10 |
-
----
-
 ---
 
 # Layer 5 — Lighting & Post-Processing
@@ -821,7 +746,7 @@ Do NOT modify terrain, water, props, or any previous layer output.
 
 4. POST-PROCESSING VOLUME
    - Create Global Volume "PostProcessVolume".
-   - Create NEW Volume Profile: Assets/BenchmarkRuns/{run-id}/Settings/TerrainPostProcessProfile.asset.
+   - Create NEW Volume Profile: Assets/WorldGenRuns/{run-id}/Settings/TerrainPostProcessProfile.asset.
    - Set weight = 1.0, Priority = 1.
    - Camera must have renderPostProcessing = true.
 
@@ -853,17 +778,6 @@ Do NOT modify terrain, water, props, or any previous layer output.
    Return: sun settings, ambient settings, post-processing overrides enabled,
    fog state, camera settings, confirm no previous layers modified.
 ```
-
----
-
-## Layer 5 Scoring Rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| Lighting Quality (sun direction/color/intensity, shadows, ambient, skybox) | 35 |
-| Post-Processing Quality (tonemapping, bloom, color grading, vignette, SSAO, volume setup) | 35 |
-| Environment Quality (fog, camera setup, overall atmosphere) | 20 |
-| Technical Quality (layer isolation, asset cleanliness, performance) | 10 |
 
 ---
 
@@ -923,7 +837,7 @@ IMPORTANT RULES:
    - Wisps: X * 2.0, Y * 0.3.
 
 5. CLOUD MATERIAL
-   ONE shared material: Assets/BenchmarkRuns/{run-id}/Materials/Cloud.mat
+   ONE shared material: Assets/WorldGenRuns/{run-id}/Materials/Cloud.mat
    - URP Lit, Opaque (NOT transparent).
    - Base Color: (0.95, 0.95, 0.97, 1.0), Smoothness: 0.1, Metallic: 0.0.
    - Shadow Casting: OFF. Receive Shadows: OFF.
@@ -940,49 +854,15 @@ IMPORTANT RULES:
 
 ---
 
-## Layer 6 Scoring Rubric (100 points)
-
-| Category | Points |
-|----------|--------|
-| Cloud Shape Quality (cluster composition, type variety, size variation, puff shaping, overlap) | 35 |
-| Distribution Quality (sky coverage, open sky areas, altitude, count) | 30 |
-| Technical Quality (no shadow casting, layer isolation, hierarchy, material, performance) | 25 |
-| Visual Quality (reads as clouds, natural sky feel) | 10 |
-
 ---
 
----
-
-## Overall Scoring Guide
-
-| Layer | Max Score |
-|-------|-----------|
-| Layer 1 — Terrain | 100 (× map size multiplier: 0.5x–1.3x) |
-| Layer 2 — Splat Map | 100 |
-| Layer 3 — Water | 100 |
-| Layer 4 — Props | 100 |
-| Layer 5 — Lighting | 100 |
-| Layer 6 — Sky & Clouds | 100 |
-| **Total** | **600** |
-
-| Score | Meaning |
-|-------|---------|
-| 0–2 per layer | Broken scene, compile errors, floating objects, wrong scale |
-| 3–5 per layer | Layer incomplete or significant errors |
-| 6–8 per layer | Layer complete with minor issues |
-| 9–10 per layer | All criteria met, verified, reproducible |
-
----
-
-*Benchmark by Darko Tomic. Community: [darkounity.com](https://darkounity.com)*
-
----
+*By Darko Tomic. Community: [darkounity.com](https://darkounity.com)*
 
 ---
 
 ## CodeDom / MCP execute_code — Known Failure Patterns
 
-When running this benchmark via Unity MCP (`execute_code`), the compiler backend is **CodeDom (C# 6)**. Several patterns cause silent or noisy failures that invalidate a run. This section documents every failure observed in practice so future agents avoid repeating them.
+When running via Unity MCP (`execute_code`), the compiler backend is **CodeDom (C# 6)**. Several patterns cause silent or noisy failures. This section documents every failure observed in practice so future agents avoid repeating them.
 
 ---
 
@@ -1055,7 +935,7 @@ float[][] data = new float[][] { row0, row1 };  // ✅
 
 **What fails:** Any call to `AssetDatabase.DeleteAsset` returns a blocked-pattern error when `safety_checks` is at its default value of `true`.
 
-**Fix:** Pass `safety_checks: false` on any `execute_code` call that needs to delete or overwrite assets. Always do this for calls that write textures, meshes, or materials (delete-then-recreate is the standard fresh-generation pattern required by the benchmark).
+**Fix:** Pass `safety_checks: false` on any `execute_code` call that needs to delete or overwrite assets. Always do this for calls that write textures, meshes, or materials (delete-then-recreate is the standard fresh-generation pattern).
 
 ---
 
@@ -1087,12 +967,12 @@ Three specific API mistakes caused compilation errors:
 
 ## Final Step — Run Report
 
-**After completing all 6 layers**, write a run report to disk as a local Markdown file. This file is never pushed to any repository — it is a local artifact used for comparing runs across agents and building training data.
+**After completing all 6 layers**, write a run report to disk as a local Markdown file. This file is never pushed to any repository — it is a local artifact for reviewing the run.
 
 ### Where to save
 
 ```
-Assets/BenchmarkRuns/{run-id}/run-report.md
+Assets/WorldGenRuns/{run-id}/run-report.md
 ```
 
 Write the file using `System.IO.File.WriteAllText` inside an `execute_code` call (with `safety_checks: false`).
@@ -1104,13 +984,13 @@ The report must contain every field listed below. If a layer failed entirely, re
 ---
 
 ```markdown
-# Benchmark Run Report
+# World Generation Run Report
 
 **Run ID:** {run-id}
 **Date:** {YYYY-MM-DD from System.DateTime.Now}
 **Agent:** {your self-identification slug, same as the run ID prefix}
 **Execution mode:** MCP — all layers via execute_code, no .cs files written
-  OR: Script fallback — .cs Editor scripts written under Assets/BenchmarkRuns/{run-id}/Editor/
+  OR: Script fallback — .cs Editor scripts written under Assets/WorldGenRuns/{run-id}/Editor/
 
 ---
 
@@ -1222,24 +1102,24 @@ All assets written during this run:
 
 | Asset | Path |
 |-------|------|
-| Scene | Assets/BenchmarkRuns/{run-id}/run-scene.unity |
-| Terrain mesh | Assets/BenchmarkRuns/{run-id}/Meshes/GroundMesh.asset |
-| Ground material | Assets/BenchmarkRuns/{run-id}/Materials/Ground.mat |
-| Heightmap | Assets/BenchmarkRuns/{run-id}/Data/Heightmap.exr |
-| FlowMap | Assets/BenchmarkRuns/{run-id}/Data/FlowMap.exr |
-| terrain.json | Assets/BenchmarkRuns/{run-id}/Data/terrain.json |
-| Albedo bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundHeightTint.png |
-| Normal bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundNormalMap.png |
-| Mask bake | Assets/BenchmarkRuns/{run-id}/Textures/GroundMaskMap.png |
-| Water mesh | Assets/BenchmarkRuns/{run-id}/Meshes/RiverWaterMesh.asset |
-| Water material | Assets/BenchmarkRuns/{run-id}/Materials/Water.mat |
-| Pine bark mesh | Assets/BenchmarkRuns/{run-id}/Meshes/PineBark.asset |
-| Pine leaves mesh | Assets/BenchmarkRuns/{run-id}/Meshes/PineLeaves.asset |
-| Bark material | Assets/BenchmarkRuns/{run-id}/Materials/TreeBarkPine.mat |
-| Leaf material | Assets/BenchmarkRuns/{run-id}/Materials/TreeLeafPine.mat |
-| Cloud material | Assets/BenchmarkRuns/{run-id}/Materials/Cloud.mat |
-| Post-process profile | Assets/BenchmarkRuns/{run-id}/Settings/TerrainPostProcessProfile.asset |
-| **Run report** | Assets/BenchmarkRuns/{run-id}/run-report.md |
+| Scene | Assets/WorldGenRuns/{run-id}/run-scene.unity |
+| Terrain mesh | Assets/WorldGenRuns/{run-id}/Meshes/GroundMesh.asset |
+| Ground material | Assets/WorldGenRuns/{run-id}/Materials/Ground.mat |
+| Heightmap | Assets/WorldGenRuns/{run-id}/Data/Heightmap.exr |
+| FlowMap | Assets/WorldGenRuns/{run-id}/Data/FlowMap.exr |
+| terrain.json | Assets/WorldGenRuns/{run-id}/Data/terrain.json |
+| Albedo bake | Assets/WorldGenRuns/{run-id}/Textures/GroundHeightTint.png |
+| Normal bake | Assets/WorldGenRuns/{run-id}/Textures/GroundNormalMap.png |
+| Mask bake | Assets/WorldGenRuns/{run-id}/Textures/GroundMaskMap.png |
+| Water mesh | Assets/WorldGenRuns/{run-id}/Meshes/RiverWaterMesh.asset |
+| Water material | Assets/WorldGenRuns/{run-id}/Materials/Water.mat |
+| Pine bark mesh | Assets/WorldGenRuns/{run-id}/Meshes/PineBark.asset |
+| Pine leaves mesh | Assets/WorldGenRuns/{run-id}/Meshes/PineLeaves.asset |
+| Bark material | Assets/WorldGenRuns/{run-id}/Materials/TreeBarkPine.mat |
+| Leaf material | Assets/WorldGenRuns/{run-id}/Materials/TreeLeafPine.mat |
+| Cloud material | Assets/WorldGenRuns/{run-id}/Materials/Cloud.mat |
+| Post-process profile | Assets/WorldGenRuns/{run-id}/Settings/TerrainPostProcessProfile.asset |
+| **Run report** | Assets/WorldGenRuns/{run-id}/run-report.md |
 ```
 
 ---
@@ -1250,4 +1130,4 @@ All assets written during this run:
 - **Be accurate.** Copy real numbers from your layer outputs — vertex counts, seed values, tree counts, etc. Do not estimate.
 - **Log every failed call.** Include every `execute_code` call that returned a compilation error, runtime exception, timeout, or safety-check block. Include the exact error message and what fix was applied.
 - **Do not omit skipped layers.** If a layer was not completed, write a section for it with status "Not completed" and the reason.
-- **File location is local only.** Save to `Assets/BenchmarkRuns/{run-id}/run-report.md`. Do not push this file to any remote repository.
+- **File location is local only.** Save to `Assets/WorldGenRuns/{run-id}/run-report.md`. Do not push this file to any remote repository.

@@ -1,10 +1,17 @@
-# Darko Unity LLM Intelligence Benchmark Test
+# One Shot Prompt — World Generation in Unity
 
-A reproducible benchmark for testing whether AI coding agents can generate procedural 3D worlds inside the Unity Editor — by driving the editor directly through [Unity MCP](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial), or by writing C# scripts the user runs in the editor.
+A single prompt that drives an AI coding agent to generate a complete procedural 3D landscape inside the Unity Editor — by driving the editor directly through [Unity MCP](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial), or by writing C# scripts the user runs in the editor.
 
-## What this tests
+## What it generates
 
-Can an AI agent build a realistic landscape with terrain, water, and props by generating and executing C# code in the Unity Editor? The benchmark scores planning, API correctness, asset generation, and whether the agent actually finishes.
+A realistic procedural landscape built in 6 layers:
+
+1. **Terrain mesh** — FBM heightfield with hydraulic erosion and a carved river network
+2. **Terrain textures** — context-aware baked PBR (slope, aspect, curvature, river proximity)
+3. **River water** — mask-based transparent water mesh following every carved channel
+4. **Pine forest** — Poisson-disk clumped trees with power-law scale and slope orientation
+5. **Lighting & post-processing** — sun, shadows, ambient, ACES tonemapping, bloom, color grading
+6. **Sky & clouds** — procedural sphere-cluster clouds at altitude
 
 ## Requirements
 
@@ -12,7 +19,7 @@ Can an AI agent build a realistic landscape with terrain, water, and props by ge
 - An AI coding agent (Claude Code, Cursor, Windsurf, Copilot, etc.)
 - **Unity MCP server** (recommended) — [setup guide](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial)
 
-## How agents should work
+## How agents work
 
 There are two valid execution paths:
 
@@ -35,48 +42,38 @@ The agent writes `.cs` Editor scripts into your Assets folder. Each script uses 
 - Create a Unity 2022.3+ project with **URP** (Universal Render Pipeline) configured
 - *(Optional)* Install [Unity MCP](https://darkounity.com/blog/how-do-i-use-ai-in-unity-for-free-2026-tutorial) for Path A
 
-### Step 2 — Start the benchmark
+### Step 2 — Start the prompt
 
 **Option A — with repo cloned:**
-Clone this repo into `Assets/` and point your agent at `START-BENCHMARK.md`.
+Clone this repo into `Assets/` and point your agent at `WORLD-GENERATION-PROMPT.md`.
 
 **Option B — no repo:**
-Copy the entire contents of `START-BENCHMARK.md` and paste it to your agent as the first message.
+Copy the entire contents of `WORLD-GENERATION-PROMPT.md` and paste it to your agent as the first message.
 
-`START-BENCHMARK.md` contains everything: global rules, run ID setup, and all 7 layer prompts in order. The agent runs all layers autonomously.
-
-### Step 3 — Score the result
-
-Each layer section in `START-BENCHMARK.md` includes a 100-point rubric. Total score is out of 700.
+`WORLD-GENERATION-PROMPT.md` contains everything: global rules, run ID setup, and all 6 layer prompts in order. The agent runs all layers autonomously.
 
 ## Run isolation
 
-Each run is fully self-contained so you can compare results from multiple agents (e.g. Claude, Codex, Cursor) without contamination.
+Each run is self-contained so you can compare results from multiple agents without contamination.
 
-The agent **auto-generates** a run ID from its model name and today's date — e.g. `claude-opus-4-6-2026-04-10/`, `gpt-5-2026-04-10/`, `codex-2026-04-10/`. You can also specify a custom run ID in the prompt if you want.
+The agent **auto-generates** a run ID from its model name and today's date — e.g. `claude-opus-4-6-2026-04-10/`, `gpt-5-2026-04-10/`. You can also specify a custom run ID in the prompt.
 
 All assets and the scene for a run live under:
 
 ```
-Assets/BenchmarkRuns/{run-id}/
+Assets/WorldGenRuns/{run-id}/
 ```
 
-To review a run later, open `Assets/BenchmarkRuns/{run-id}/run-scene.unity`. Previous runs are untouched.
+To review a run later, open `Assets/WorldGenRuns/{run-id}/run-scene.unity`. Previous runs are untouched.
 
 ## Key rules
 
-- **Run isolation**: All assets saved under `Assets/BenchmarkRuns/{run-id}/`. Never write to shared folders.
+- **Run isolation**: All assets saved under `Assets/WorldGenRuns/{run-id}/`. Never write to shared folders.
 - **Fresh generation**: Every texture, material, and mesh must be generated from scratch by the agent. No reusing existing asset files.
 - **Scale (1,1,1)**: All objects use `transform.localScale = (1,1,1)`. Map size is controlled by mesh geometry, not transform scale.
 - **Layer isolation**: Each layer only adds — never modifies previous layers' terrain, textures, or water.
 - **Raycast grounding**: All props are placed via downward raycast to `ProceduralMeshGround`.
 
-## Scoring
-
-> **Note:** Scoring is still a work in progress and will be implemented properly soon. Measuring what looks "good" visually is genuinely hard, so the current rubrics are a rough guide rather than a final system.
-
-Each layer in `START-BENCHMARK.md` includes a 100-point scoring rubric. Total score is out of 700 across all 7 layers. Layer 1 has a map size multiplier (0.5x–1.3x) that applies to its score.
-
 ## Community
 
-Visit [darkounity.com](https://darkounity.com) to learn Unity with others, share benchmark results, and connect with builders.
+Visit [darkounity.com](https://darkounity.com) to learn Unity with others, share results, and connect with builders.
