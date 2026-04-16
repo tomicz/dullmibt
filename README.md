@@ -6,8 +6,8 @@ A single prompt that drives an AI coding agent to generate a complete procedural
 
 A realistic procedural landscape built in 6 layers:
 
-1. **Terrain mesh** — FBM heightfield with hydraulic erosion and a carved river network
-2. **Terrain textures** — context-aware baked PBR (slope, aspect, curvature, river proximity)
+1. **Terrain mesh** — FBM heightfield with momentum-based hydraulic erosion, two-phase hydrology (rivers + lakes), and seed-driven feature probability (ocean edges, lakes, 1–5 rivers)
+2. **Terrain textures** — unified 4K context-aware bake with heightlerp blending (flow accumulation and carve depth as regular splatting inputs, wetness as continuous post-blend modifier)
 3. **River water** — mask-based transparent water mesh following every carved channel
 4. **Pine forest** — Poisson-disk clumped trees with power-law scale and slope orientation
 5. **Lighting & post-processing** — sun, shadows, ambient, ACES tonemapping, bloom, color grading
