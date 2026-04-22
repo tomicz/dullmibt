@@ -121,6 +121,25 @@ Layer 1 is **only** the bare terrain mesh, the river network carved into it, and
 - Seed source: `unchecked((int)System.DateTime.Now.Ticks)`.
 - The actual integer used MUST be written into `terrain.json` so any run can be replayed for debugging.
 - Every randomized step in the pipeline (FBM offsets, droplet starts, river noise, etc.) must seed from this single value (typically via `System.Random(seed)`), not from `UnityEngine.Random` global state.
+- Derive sub-seeds from the master seed for independent pipeline stages:
+    ```
+    terrainSeed  = seed
+    hydroSeed    = seed + 1
+    featureSeed  = seed + 2
+    ```
+
+## Feature Probability Rule
+
+**Not every map has every feature.** Use `featureSeed` to roll probabilities:
+
+```
+var featRng = new System.Random(featureSeed);
+bool hasOcean   = featRng.NextDouble() < 0.30;   // 30% of maps
+bool hasLakes   = featRng.NextDouble() < 0.60;   // 60% of maps
+int  targetRiverCount = 1 + (int)(featRng.NextDouble() * 4);  // 1–5 rivers
+```
+
+Record `hasOcean`, `hasLakes`, `targetRiverCount` in `terrain.json`.
 
 ---
 
@@ -177,19 +196,50 @@ Requirements:
    - Store the result as a width*height float[] DEM. This DEM is the working surface
      for all subsequent hydrology steps.
 
-5. HYDRAULIC EROSION (Sebastian Lague droplet simulation)
+5. HYDRAULIC EROSION (Sebastian Lague droplet simulation with momentum)
    - ~100,000 droplets (scale linearly with cell count for non-default sizes).
-   - Per-droplet: random start cell, inertia 0.05, sediment capacity factor 4,
-     erode speed 0.4, deposit speed 0.3, evaporate 0.01, gravity 4, max lifetime 30,
+   - Per-droplet: random start cell, inertia 0.15, sediment capacity factor 4,
+     erode speed 0.4, deposit speed 0.3, evaporate 0.01, gravity 4, max lifetime 60,
      erosion brush radius 3 (precomputed weighted disk).
+   - Inertia 0.15 (not 0.05) causes droplets to overshoot curves, producing natural
+     meanders as emergent behavior (SimpleHydrology approach).
+   - Lifetime 60 (not 30) lets droplets carve longer channels before evaporating.
    - Erosion mutates the DEM in place; this carves natural valleys and ridges.
 
-6. PRIORITY-FLOOD DEPRESSION FILL (Barnes 2014)
+5b. OCEAN EDGE CARVING (only if hasOcean == true)
+   - Pick a random map edge (N/S/E/W) using featureSeed.
+   - Along that edge, carve a noise-warped coastline:
+       coastNoise = 0.7 * Perlin(pos * 0.008 + offset1) + 0.3 * Perlin(pos * 0.025 + offset2)
+       coastLine = edgePos + (coastNoise - 0.5) * localSizeX * 0.15
+   - For cells beyond the coastline (toward the map edge), apply a continental shelf
+     parabolic drop profile:
+       distFromCoast = distance from cell to coastLine (in cells)
+       shelfWidth = 25 cells
+       t = clamp01(distFromCoast / shelfWidth)
+       drop = -18.0 * t * t   // parabolic, max 18m below sea level
+       dem[cell] = lerp(dem[cell], drop, smoothstep(0, 1, t))
+   - This creates a natural coastline with a shelf, not a cliff edge.
+
+6. TWO-PHASE HYDROLOGY (critical — do NOT use single-phase)
+
+   Phase A — Full Priority-Flood fill (Barnes 2014):
    - Build a min-heap of all edge cells keyed by elevation.
    - Pop lowest, raise each unvisited neighbour to max(neighbour, popped + epsilon)
      where epsilon = 5e-4. Push neighbour onto heap.
-   - Result: a hydrologically corrected DEM with NO interior pits — every cell drains
+   - Track raiseAmount[cell] = filledHeight - originalHeight for each cell.
+   - Result: a FULLY FILLED DEM with NO interior pits — every cell drains
      downhill to the boundary. This is the precondition for connected rivers.
+
+   Phase B — Lake identification (separate from fill):
+   - Flood-fill contiguous regions where raiseAmount > 0.
+   - Accept basins with >= 30 cells AND max depth >= 0.5m as lakes.
+   - Tag lake cells with a lakeID. Record lake cell count in terrain.json.
+   - If hasLakes == false, skip Phase B (still do Phase A — rivers need it).
+
+   WHY TWO-PHASE: A single-phase approach that tries to keep lake depressions
+   unfilled breaks D8 flow routing. Water enters basins and has nowhere to go,
+   producing only ~127 river cells instead of 2000+. Always fill ALL depressions
+   for flow routing, then identify lakes separately from raiseAmount data.
 
 7. D8 FLOW DIRECTION + ACCUMULATION
    - For each interior cell, choose the steepest of 8 neighbours weighted by
@@ -205,8 +255,8 @@ Requirements:
    - Threshold: keep cells with accumulation >= 98.5th percentile of all cells
      (i.e. top 1.5%). Mark these as "river-eligible".
    - Find mouths: river-eligible cells on the map boundary, sorted by accumulation.
-     Take up to the top 3 mouths whose accumulation >= 5x the threshold — these
-     are the dominant outflows.
+     Take up to the top `targetRiverCount` mouths whose accumulation >= 5x the
+     threshold — these are the dominant outflows.
    - Upstream BFS from each mouth following the reversed D8 graph: walk into any
      upstream river-eligible cell. Tag every visited cell with its mouth's river ID.
      The result is up to 3 connected, edge-to-edge river systems.
@@ -261,9 +311,9 @@ Requirements:
       OutputAsFloat flag). Final on-disk format will be RGBAHalf — that is correct.
     - Channel layout (one cell per pixel, exact same dimensions as the vertex grid):
         R = normalized flow accumulation (acc / maxAcc), 0..1
-        G = river mask (1.0 inside any carved river band, 0 outside)
+        G = water mask (1.0 inside any carved river band OR lake cell, 0 outside)
         B = carve depth in meters at this cell (0 outside river bands)
-        A = centerline width radius in cells (0 outside river bands)
+        A = centerline width radius in cells (0 outside river bands; -1 for lake-only cells)
     - Importer settings: sRGB OFF, filterMode Point, wrapMode Clamp,
       textureCompression None, isReadable TRUE.
 
@@ -271,11 +321,16 @@ Requirements:
     - Path: Assets/WorldGenRuns/{run-id}/Data/terrain.json
     - Required fields:
         seed                    int    (the actual seed used — for replay)
+        terrainSeed, hydroSeed, featureSeed  int  (derived sub-seeds)
+        hasOcean                bool   (feature roll result)
+        hasLakes                bool   (feature roll result)
+        targetRiverCount        int    (feature roll result, 1–5)
         localSizeX, localSizeZ  int
         vertsX, vertsZ          int
         minHeight, maxHeight    float  meters
-        riverSystemCount        int    1..3
+        riverSystemCount        int    1..targetRiverCount
         riverCellCount          int    total cells flagged as river
+        lakeCellCount           int    total cells identified as lake (0 if hasLakes false)
         widthRadiusMin/Max      float  cells
         carveDepthMin/Max       float  meters
         heightmapPath           string asset path to Heightmap.exr
@@ -337,23 +392,12 @@ For every output texel, sample (from the mesh and precomputed grids):
 - **slope** — `1 - max(0, normal.y)`, bilinear from mesh normals
 - **curvature** — `h - avg(h ± 1 neighbor)` on the vertex grid, bilinear. Positive = ridge, negative = valley.
 - **aspect** — `-dot(normalXZ, sunDirXZ)` where both are normalized XZ vectors. Positive = sun-facing slope (south-ish for a northern-hemisphere sun), negative = shaded (north-ish).
-- **distToRiver** — distance (m) to nearest river cell. See "River distance and width" below.
-- **widthAtNearestRiver** — the width radius (in cells) of whichever river cell is closest. Allows zones to scale with river size. See "River distance and width" below.
+- **flowAccumulation** — normalized flow accumulation from FlowMap.exr R channel (0..1). Bilinear sample.
+- **carveDepth** — carve depth in meters from FlowMap.exr B channel. Bilinear sample.
+- **waterMask** — FlowMap.exr G channel > 0.5 (river or lake cell). Nearest-neighbor sample.
+- **lakeMask** — FlowMap.exr A channel < 0 (lake-only cells have A = -1). Nearest-neighbor sample.
 
-## River distance and width (critical)
-
-Use the **`FlowMap.exr` G-channel river mask**, NOT the `RiverPath` polyline. `RiverPath` only contains the primary river's ~36 waypoints — secondary rivers are invisible to it, and even the primary is coarsely sampled. The FlowMap G channel is `1` inside every carved river cell of every river system.
-
-Compute two grids via a **Chamfer distance feature transform** (two-pass, O(N)):
-
-- `distGrid[i]` = Euclidean-approximate meters from cell `i` to the nearest river-mask cell
-- `widthGrid[i]` = the `widthRadius` (FlowMap A channel) of that nearest cell, propagated along with the distance
-
-Initialisation: river cells (G > 0.5) set `dist=0` and `width = max(A, 3)` (clamp to minimum 3 cells ≈ 6m because EXR interpolation sometimes writes A=0 at river-mask pixels). Non-river cells set `dist=BIG, width=0`.
-
-Forward pass (top-left→bottom-right) and backward pass (bottom-right→top-left): at each cell, if any neighbor offers a shorter distance, copy BOTH its distance+edge-cost AND its `width` value. This propagates the nearest-cell's width to the whole grid.
-
-Sample per output texel via bilinear on `distGrid`, nearest-neighbor on `widthGrid` (preserve discontinuities at watershed boundaries).
+**No distance transforms or width propagation needed.** Flow accumulation and carve depth are continuous fields that naturally fade with distance from water. They feed into the same weight functions as slope, height, and curvature — no special river-bank or mud-zone logic.
 
 ## Critical smoothstep note
 
@@ -366,48 +410,58 @@ float ss(float e0, float e1, float x) {
 }
 ```
 
-## Layers (10)
+## Layers (9) — Unified Splatting
 
 Each has: base RGB, noise seed + frequency, height-noise seed + frequency, heightlerp bias, and PBR mask values.
 
+Flow accumulation and carve depth are **regular inputs** to the weight functions, just like slope and height. There are no special mud zones, river-bank layers, or distance-based falloff rings. Water influence shows up naturally through the unified weights and the post-blend wetness modifier (see below).
+
 | # | Name | Weight rule | Base color |
 |---|------|-------------|-----------|
-| 0 | grass-lush | `(1 - ss(0.1, 0.35, slope)) * ss(30, -5, h) * (0.5 + 0.5 * ss(0.2, -0.5, curv))` | dark damp green |
-| 1 | grass-dry | `(1 - ss(0.1, 0.4, slope)) * ss(-5, 25, h) * (1 - ss(35, 55, h))` | olive |
-| 2 | grass-bleached | `(1 - ss(0.05, 0.4, slope)) * ss(-0.1, 0.5, aspect) * ss(-5, 20, h) * (1 - ss(38, 55, h))` | pale yellow-green |
-| 3 | rock-exposed | `ss(0.22, 0.4, slope) + ss(35, 55, h) * ss(-0.2, 0.5, curv) * 0.9` (clamp 1.2) | gray |
-| 4 | rock-mossy | `rockyness * ss(0.4, -0.4, aspect) * ss(0.3, -0.3, curv) * ss(55, 15, h)` | mossy green-gray |
-| 5 | mud-wet | `ss(mudOuter, mudInner, distR) * (1 - ss(0.1, 0.35, slope)) * 1.6` | dark brown |
-| 6 | dirt-dry | `steepLowAlt` only (do NOT add a river-bank fringe here) | earth brown |
-| 7 | scree | `ss(0.28, 0.45, slope) * ss(15, 45, h) * (1 - ss(0.55, 0.75, slope))` | gravel |
-| 8 | snow-packed | `ss(50, 62, h) * (1 - ss(0.12, 0.32, slope))` | white |
-| 9 | snow-blown | `ss(55, 68, h) * ss(0.1, 0.28, slope) * 0.6` | pale gray-white |
+| 0 | grass-lush | `(1 - ss(0.1, 0.35, slope)) * ss(30, -5, h) * (0.5 + 0.5 * ss(0.2, -0.5, curv)) * (1 - flow * 0.6)` | dark damp green |
+| 1 | grass-dry | `(1 - ss(0.1, 0.4, slope)) * ss(-5, 25, h) * (1 - ss(35, 55, h)) * (1 - flow * 0.5)` | olive |
+| 2 | grass-bleached | `(1 - ss(0.05, 0.4, slope)) * ss(-0.1, 0.5, asp) * ss(-5, 20, h) * (1 - ss(38, 55, h)) * (1 - flow * 0.4)` | pale yellow-green |
+| 3 | rock-exposed | `min(ss(0.22, 0.4, slope) + ss(35, 55, h) * ss(-0.2, 0.5, curv) * 0.9, 1.2)` | gray |
+| 4 | rock-mossy | `rockyness * ss(0.4, -0.4, asp) * ss(0.3, -0.3, curv) * ss(55, 15, h)` | mossy green-gray |
+| 5 | dirt | `ss(0.4, 0.65, slope) * ss(25, 0, h) + flow * 0.4 + ss(0.5, 3, carve) * 0.5` clamped by `* (1 - ss(0.65, 0.8, slope))` | earth brown |
+| 6 | scree | `ss(0.28, 0.45, slope) * ss(15, 45, h) * (1 - ss(0.55, 0.75, slope))` | gravel |
+| 7 | snow-packed | `ss(50, 62, h) * (1 - ss(0.12, 0.32, slope))` | white |
+| 8 | snow-blown | `ss(55, 68, h) * ss(0.1, 0.28, slope) * 0.6` | pale gray-white |
 
-- `steepLowAlt = ss(0.4, 0.65, slope) * ss(25, 0, h)`
+- `flow` = flowAccumulation (FlowMap R), `carve` = carveDepth (FlowMap B)
+- `asp` = aspect
 - `rockyness = ss(0.15, 0.35, slope) + ss(30, 50, h) * 0.4`
 
-### Width-scaled mud zone
+**Key insight:** Grass layers suppress themselves where flow is high (`* (1 - flow * 0.6)`), and dirt gains weight from flow and carve depth (`+ flow * 0.4 + ss(0.5, 3, carve) * 0.5`). Near rivers and in drainage channels, dirt naturally wins. No special mud layer needed.
 
-The mud-wet zone scales with the size of the nearest river:
+### Wetness — continuous post-blend modifier
+
+Wetness is NOT a material layer. It is a continuous modifier applied AFTER heightlerp blending to darken and warm the final albedo:
 
 ```
-widthMeters = widthAtNearestRiver * meshCellMeters   // meshCellMeters ≈ 2m typically
-mudFar   = max(2.0, widthMeters * 0.5)               // center-out radius
-mudInner = mudFar * 0.6                              // full-opacity radius
-mudOuter = mudFar * 1.4                              // fade-to-zero radius
+// Compute per-texel wetness
+wetness = flowAccumulation * 0.55
+        + (1 - slope) * 0.10         // flat areas retain moisture
+        + max(0, -curvature) * 0.35  // concave valleys collect water
+if (waterMask || lakeMask) wetness = 1.0;
+wetness = clamp01(wetness);
+
+// Apply after heightlerp blend produces finalR, finalG, finalB
+float darken = 1 - wetness * 0.45;
+finalR *= darken * (1 + wetness * 0.05);   // slight warm shift
+finalG *= darken;
+finalB *= darken * (1 - wetness * 0.08);   // reduce blue
 ```
 
-The wide `mudInner..mudOuter` falloff range makes edges visibly soften into the surrounding layer (usually grass-lush). Big rivers get ~6–10m of mud; small streams get ~2–3m. This removes the "painted-on" look of a hard-cutoff mud band.
-
-**Do not add a dirt-dry bank fringe around mud.** It creates a double-ring (dark mud + lighter brown) that reads as fake. Let mud fade straight into grass via heightlerp.
+This replaces the old mud-wet layer entirely. Wetness darkens and warms the underlying material (whatever won the heightlerp blend), creating natural-looking damp soil near rivers, wet valleys, and saturated flats without any special-case zones.
 
 Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heightFreq ≈ 0.28–0.65`, `variation ≈ 0.04–0.16` (low for snow, higher for rock). Use independent seed offsets per layer and per field (albedo noise vs height noise).
 
 ## Bake algorithm (per output texel)
 
 ```
-1. Sample context: height, slope, curv, aspect, distR, meshNormal (bilinear from grids)
-2. Evaluate all 10 layer weights; keep top-2 (id0, W0) and (id1, W1)
+1. Sample context: height, slope, curv, aspect, flow, carve, waterMask, lakeMask, meshNormal (bilinear from grids)
+2. Evaluate all 9 layer weights; keep top-2 (id0, W0) and (id1, W1)
 3. If W0 < 1e-3 default to grass-dry (id=1) to avoid empty pixels
 4. For top 2 layers, procedural color + height from world-space FBM:
      albedo_i = baseRGB_i * (1 + (fbm2(worldXY, noiseSeed_i, freq_i) - 0.5) * 2 * variation_i)
@@ -427,6 +481,9 @@ Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heigh
 7. Sun exposure tint (uses mesh normal, not per-layer normal):
      sunExp = saturate(dot(meshNormal, -sunDir))
      albedo *= lerp(0.85, 1.15, ss(0.2, 0.8, sunExp))
+7b. Wetness modifier (applied AFTER sun tint, BEFORE normal/mask):
+     Compute wetness from flow, slope, curvature, waterMask, lakeMask (see formula above).
+     Apply darken + warm shift to albedo RGB. This replaces the old mud-wet layer.
 8. Normal map: gradient of the macro overlay (2 extra Perlin taps). Keep subtle.
 9. Mask map: from top layer's height noise
      metallic = layerMetallic[id0]
@@ -438,9 +495,9 @@ Per-layer noise params (suggested): `noiseFreq ≈ 0.16–0.38` cycles/m, `heigh
 
 ## Output files
 
-- `Assets/WorldGenRuns/{run-id}/Textures/GroundHeightTint.png` (1024², sRGB, albedo composite)
-- `Assets/WorldGenRuns/{run-id}/Textures/GroundNormalMap.png` (1024², linear, normal map)
-- `Assets/WorldGenRuns/{run-id}/Textures/GroundMaskMap.png` (1024², linear, R=metallic, G=AO, A=smoothness)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundHeightTint.png` (4096², sRGB, albedo composite)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundNormalMap.png` (4096², linear, normal map)
+- `Assets/WorldGenRuns/{run-id}/Textures/GroundMaskMap.png` (4096², linear, R=metallic, G=AO, A=smoothness)
 
 **No intermediate tileable texture files** are written. Earlier per-biome `Splat{Grass|Rock|Dirt|Snow}{Albedo|Normal|Mask}.png` files from the old spec should be deleted if present.
 
@@ -454,11 +511,13 @@ On `Ground.mat` (URP Lit):
 
 ## Performance & budget
 
-- 10 layer rule evaluations + top-2 selection per texel (~50 inlined smoothsteps).
+- 9 layer rule evaluations + top-2 selection + wetness modifier per texel (~50 inlined smoothsteps).
 - 2 × 2-octave FBM for albedo + 2 × 2-octave for heightlerp + 2-tap macro + 2-tap normal gradient ≈ 14 Perlin calls per texel.
-- 1024² output ≈ 14M Perlin calls → ~15–25s in CodeDom C#.
-- **2048² output will likely exceed the MCP execute_code timeout**. If you need higher resolution, split the bake across multiple execute_code calls (top half / bottom half) or precompute an intermediate EXR for layer IDs and do a second pass for albedo.
+- **4096² output ≈ 235M Perlin calls — WILL exceed MCP execute_code timeout in a single call.**
+- **Split the bake across multiple execute_code calls:** bake top half (rows 0–2047) in one call, bottom half (rows 2048–4095) in another. Write each half to a temporary byte array or file, then combine into the final PNG in a third call. This is the tested approach for 4K output.
+- Alternative: bake in 4 quadrants if even halves timeout.
 - Inline the smoothstep, distance, and bilinear helpers — closure invocation overhead is measurable in CodeDom.
+- No Chamfer distance transform needed (removed distToRiver). Flow and carve are read directly from FlowMap.exr — simpler and faster than the old approach.
 
 ---
 
@@ -997,13 +1056,17 @@ The report must contain every field listed below. If a layer failed entirely, re
 ## Layer 1 — Terrain Mesh + Hydrology
 
 - Seed: {seed} (recorded in terrain.json for replay)
+- Sub-seeds: terrain={terrainSeed}, hydro={hydroSeed}, feature={featureSeed}
+- Feature rolls: hasOcean={hasOcean}, hasLakes={hasLakes}, targetRiverCount={targetRiverCount}
 - Map size: {localSizeX}×{localSizeZ}m, {vertsX}×{vertsZ} verts ({N} vertices total), {triCount} triangles
 - Height range: {minH}m to {maxH}m
 - FBM octaves: 5, domain-warped, continental tilt applied
-- Erosion droplets simulated: {numDroplets}
+- Erosion: {numDroplets} droplets, inertia 0.15, lifetime 60
+- Hydrology: two-phase (full Priority-Flood fill + separate lake ID)
 - Depressions filled (Priority-Flood): {deprFilled}
 - Max flow accumulation: {maxAcc}
 - River systems: {riverSystemCount}, River cells: {riverCellCount}
+- Lake cells: {lakeCellCount}
 - Carve depth range: {carveDepthMin}–{carveDepthMax}m
 - Width radius range: {widthRadiusMin}–{widthRadiusMax} cells
 - RiverPath waypoints: {waypointCount}
@@ -1012,9 +1075,9 @@ The report must contain every field listed below. If a layer failed entirely, re
 
 ## Layer 2 — Multi-Layer Context-Aware Bake
 
-- Output resolution: {bakeSize}×{bakeSize}px
+- Output resolution: {bakeSize}×{bakeSize}px (should be 4096)
 - Layer count: {layerCount} (list active layer names)
-- River distance method: Chamfer two-pass feature transform
+- Splatting method: unified weights (flow/carve as regular inputs) + post-blend wetness modifier
 - Heightlerp k: {k}
 - Macro overlay: yes/no
 - Sun exposure tint: yes/no
